@@ -48,7 +48,6 @@ defmodule MLLP.Sender do
   end
 
   def handle_call({:send, message}, _from, state) do
-
     :gen_tcp.send(state.socket, message)
     |> case do
       :ok ->
@@ -61,7 +60,6 @@ defmodule MLLP.Sender do
         reply = {:ok, :application_error}
         {:reply, reply, new_state}
     end
-
   end
 
   def handle_call(:get_messages_sent_count, _reply, state) do
@@ -77,17 +75,23 @@ defmodule MLLP.Sender do
     new_state =
       %State{state | pending_reconnect: nil}
       |> attempt_connection()
-      {:noreply, new_state}
+
+    {:noreply, new_state}
   end
 
   defp attempt_connection(%State{failures: failures} = state) do
-
-    :gen_tcp.connect(state.ip_address, state.port, [:binary, {:packet, 0}, {:active, false}], 2000)
+    :gen_tcp.connect(
+      state.ip_address,
+      state.port,
+      [:binary, {:packet, 0}, {:active, false}],
+      2000
+    )
     |> case do
       {:ok, socket} ->
         if state.pending_reconnect do
           Process.cancel_timer(state.pending_reconnect)
         end
+
         new_state = %{state | failures: 0, socket: socket, pending_reconnect: nil}
         log_message(new_state, " connected.")
         new_state
@@ -97,7 +101,6 @@ defmodule MLLP.Sender do
         log_message(new_state, " could not connect, reason: " <> "#{reason}")
         maintain_reconnect_timer(new_state)
     end
-
   end
 
   defp maintain_reconnect_timer(state) do
@@ -111,6 +114,7 @@ defmodule MLLP.Sender do
         ack = raw_ack |> Envelope.unwrap_message()
         unwrapped_message = message |> Envelope.unwrap_message()
         Ack.verify_ack_against_message(unwrapped_message, ack)
+
       {:error, reason} ->
         log_message(state, " could not receive ack, reason: " <> "#{reason}")
         maintain_reconnect_timer(state)

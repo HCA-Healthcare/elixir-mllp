@@ -13,7 +13,6 @@ defmodule SenderTest do
 
     {:ok, :application_accept} = Sender.send_message(sender_pid, hl7)
 
-
     # todo verify message in receiver?
 
     :ok = MLLP.Receiver.stop(port)
@@ -28,9 +27,5 @@ defmodule SenderTest do
     hl7 = HL7.Examples.wikipedia_sample_hl7()
 
     {:ok, :application_error} = Sender.send_message(sender_pid, hl7)
-
-
   end
-
-
 end
