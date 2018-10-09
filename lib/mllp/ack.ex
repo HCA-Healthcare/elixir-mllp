@@ -43,17 +43,27 @@ defmodule MLLP.Ack do
     message_control_id = message_hl7 |> HL7.Message.get_value("MSH", 10)
     ack_message_control_id = ack_hl7 |> HL7.Message.get_value("MSA", 2)
 
-    if message_control_id == ack_message_control_id do
+    # todo make strict matching options
+    if String.contains?(ack_message_control_id, message_control_id) do
       ack_hl7
       |> HL7.Message.get_value("MSA", 1)
       |> case do
         "AA" ->
           {:ok, :application_accept}
 
+        "CA" ->
+          {:ok, :application_accept}
+
         "AR" ->
           {:ok, :application_reject}
 
+        "CR" ->
+          {:ok, :application_reject}
+
         "AE" ->
+          {:ok, :application_error}
+
+        "CE" ->
           {:ok, :application_error}
 
         bad_ack_code ->
