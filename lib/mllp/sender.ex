@@ -71,8 +71,17 @@ defmodule MLLP.Sender do
 
   def handle_call({:send, message}, _from, state) do
     :gen_tcp.send(state.socket, message)
-    reply = receive_ack_for_message(state.socket, message)
-    {:reply, reply, %State{state | messages_sent: state.messages_sent + 1}}
+    |> case do
+      :ok ->
+        reply = receive_ack_for_message(state.socket, message)
+        {:reply, reply, %State{state | messages_sent: state.messages_sent + 1}}
+
+      {:error, error_type} ->
+        reply =
+          {:error, %{type: error_type, message: "Failed to send message. Code #{error_type}"}}
+
+        {:reply, reply, state}
+    end
   end
 
   def handle_call(:get_messages_sent_count, _reply, state) do
