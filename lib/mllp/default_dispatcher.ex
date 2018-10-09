@@ -4,7 +4,7 @@ defmodule MLLP.DefaultDispatcher do
   @behaviour MLLP.Dispatcher
 
   def dispatch(message) when is_binary(message) do
-    Logger.debug(
+    Logger.warn(
       "MLLP dispatcher function not set. Default logs and discards message. Message: #{message}"
     )
 
