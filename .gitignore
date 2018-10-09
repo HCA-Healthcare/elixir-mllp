@@ -24,3 +24,4 @@ mllp-*.tar
 
 # Ignore editor artifacts
 /.elixir_ls
+.idea

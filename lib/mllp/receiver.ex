@@ -133,6 +133,9 @@ defmodule MLLP.Receiver do
 
         {:ok, :application_error} ->
           Ack.get_ack_for_message(message, :application_error)
+
+        {:error, error_map} ->
+          Ack.get_ack_for_message(message, :application_error)
       end
 
     socket_reply_payload =

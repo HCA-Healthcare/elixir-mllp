@@ -17,4 +17,19 @@ defmodule SenderTest do
     :ok = MLLP.Receiver.stop(port)
     refute Process.alive?(pid)
   end
+
+  test "Integration: sending valid HL7 with no receiver" do
+    port = 8131
+
+    {:ok, sender_pid} = Sender.start_link({{127, 0, 0, 1}, port})
+    Sender.connect(sender_pid)
+
+    hl7 = HL7.Examples.wikipedia_sample_hl7()
+
+    {:ok, :application_error} = Sender.send_message(sender_pid, hl7)
+
+
+  end
+
+
 end
