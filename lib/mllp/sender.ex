@@ -77,12 +77,7 @@ defmodule MLLP.Sender do
     new_state =
       %State{state | pending_reconnect: nil}
       |> attempt_connection()
-
-    if new_state.failures < @max_failures do
       {:noreply, new_state}
-    else
-      {:stop, :max_failures_reached, new_state}
-    end
   end
 
   defp attempt_connection(%State{failures: failures} = state) do
