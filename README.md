@@ -18,15 +18,16 @@ Start an MLLP.Sender process and store its PID
 {:ok, s1} = MLLP.Sender.start_link({{127,0,0,1}, 4090})
 ```
 
-Connect the sender
-```
-MLLP.Sender.connect(s1)
-```
+
 
 Send a message
 ```
+
 MLLP.Sender.send_message(s1, HL7.Examples.wikipedia_sample_hl7())
+ MLLP.Receiver.stop(4090)
+
 ```
 
 ## License
+
 Elixir-MLLP source code is released under Apache 2 License. Check LICENSE file for more information.

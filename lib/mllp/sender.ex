@@ -8,23 +8,14 @@ defmodule MLLP.Sender do
             ip_address: {0, 0, 0, 0},
             port: 0,
             messages_sent: 0,
-            failures: 0
-
-  @max_failures 10
+            failures: 0,
+            pending_reconnect: nil
 
   alias __MODULE__, as: State
 
   ## API
   def start_link({ip_address, port}) do
     GenServer.start_link(__MODULE__, {ip_address, port})
-  end
-
-  def connect(pid) do
-    GenServer.call(pid, :connect)
-  end
-
-  def close(pid) do
-    GenServer.call(pid, :close)
   end
 
   def send_message(pid, message) do
@@ -38,23 +29,12 @@ defmodule MLLP.Sender do
 
   ## GenServer callbacks
   def init({ip_address, port}) do
-    state = %State{ip_address: ip_address, port: port}
-
-    :gen_tcp.connect(state.ip_address, state.port, [:binary, {:packet, 0}, {:active, false}])
-    |> case do
-         {:ok, socket} ->
-           log_message(state, " connected.")
-           {:ok, %State{state | socket: socket}}
-
-         {:error, reason} ->
-           new_state = %{state | failures: 1}
-           log_message(new_state, " could not connect, reason: " <> "#{reason}")
-           {:ok, new_state, 1000}
-       end
+    state = attempt_connection(%State{ip_address: ip_address, port: port})
+    {:ok, state}
   end
 
   def log_message(state, msg) do
-    text = get_connection_string(state) <> msg
+    text = "MLLP Sender: " <> get_connection_string(state) <> msg
     Logger.warn(text)
   end
 
@@ -62,12 +42,7 @@ defmodule MLLP.Sender do
     "Connection: #{state.ip_address |> Tuple.to_list() |> Enum.join(".")}:#{state.port} "
   end
 
-  def handle_call(:close, _from, state) do
-    :ok = :gen_tcp.close(state.socket)
-    {:reply, :ok, %State{}}
-  end
-
-  def handle_call({:send, message}, _from, %State{socket: nil} = state) do
+  def handle_call({:send, _message}, _from, %State{socket: nil} = state) do
     log_message(state, " cannot send to nil socket")
     {:reply, {:ok, :application_error}, state}
   end
@@ -77,14 +52,14 @@ defmodule MLLP.Sender do
     :gen_tcp.send(state.socket, message)
     |> case do
       :ok ->
-        reply = receive_ack_for_message(state.socket, message)
+        reply = receive_ack_for_message(state, message)
         {:reply, reply, %State{state | messages_sent: state.messages_sent + 1}}
 
-      {:error, error_type} ->
-       Logger.warn("Failed to send message. Code #{error_type}")
+      {:error, reason} ->
+        log_message(state, " could not send message, reason: " <> "#{reason}")
+        new_state = maintain_reconnect_timer(state)
         reply = {:ok, :application_error}
-
-        {:reply, reply, state}
+        {:reply, reply, new_state}
     end
 
   end
@@ -94,43 +69,57 @@ defmodule MLLP.Sender do
   end
 
   def handle_info({:tcp_closed, _socket}, state) do
-    case :gen_tcp.connect(state.ip_address, state.port, []) do
-      {:ok, _socket} ->
-        new_state = %{state | failure_count: 0}
+    new_state = maintain_reconnect_timer(state)
+    {:noreply, new_state}
+  end
+
+  def handle_info(:timeout, state) do
+    new_state =
+      %State{state | pending_reconnect: nil}
+      |> attempt_connection()
+
+    if new_state.failures < @max_failures do
+      {:noreply, new_state}
+    else
+      {:stop, :max_failures_reached, new_state}
+    end
+  end
+
+  defp attempt_connection(%State{failures: failures} = state) do
+
+    :gen_tcp.connect(state.ip_address, state.port, [:binary, {:packet, 0}, {:active, false}], 2000)
+    |> case do
+      {:ok, socket} ->
+        if state.pending_reconnect do
+          Process.cancel_timer(state.pending_reconnect)
+        end
+        new_state = %{state | failures: 0, socket: socket, pending_reconnect: nil}
         log_message(new_state, " connected.")
-        {:noreply, new_state}
+        new_state
 
       {:error, reason} ->
-        new_state = %{state | failure_count: 1}
-        log_message(new_state, " could not connect, error code: " <> "#{reason}")
-        {:noreply, new_state, 1000}
+        new_state = %{state | failures: failures + 1}
+        log_message(new_state, " could not connect, reason: " <> "#{reason}")
+        maintain_reconnect_timer(new_state)
     end
+
   end
 
-  def handle_info(:timeout, state = %State{failures: failures}) do
-    if failures < @max_failures do
-      case :gen_tcp.connect(state.ip_address, state.port, []) do
-        {:ok, _socket} ->
-          new_state = %{state | failures: 0}
-          {:noreply, new_state}
-
-        {:error, _reason} ->
-          new_state = %{state | failures: failures + 1}
-          {:noreply, new_state, 1000}
-      end
-    else
-      # log max
-      {:stop, :max_failures_reached, state}
-    end
+  defp maintain_reconnect_timer(state) do
+    ref = state.pending_reconnect || Process.send_after(self(), :timeout, 1000)
+    %State{state | pending_reconnect: ref}
   end
 
-# todo parse partial or more msg
-  defp receive_ack_for_message(socket, message) do
-    case :gen_tcp.recv(socket, 0) do
+  defp receive_ack_for_message(state, message) do
+    case :gen_tcp.recv(state.socket, 0) do
       {:ok, raw_ack} ->
         ack = raw_ack |> Envelope.unwrap_message()
         unwrapped_message = message |> Envelope.unwrap_message()
         Ack.verify_ack_against_message(unwrapped_message, ack)
+      {:error, reason} ->
+        log_message(state, " could not receive ack, reason: " <> "#{reason}")
+        maintain_reconnect_timer(state)
+        {:ok, :application_error}
     end
   end
 end
