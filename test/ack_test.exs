@@ -66,7 +66,9 @@ defmodule AckTest do
 
   defp get_ack_for_wikipedia_example(ack_type) when is_atom(ack_type) do
     incoming_raw = HL7.Examples.wikipedia_sample_hl7()
-    raw_ack = Ack.get_ack_for_message(incoming_raw, ack_type)
-    hl7_ack = raw_ack |> HL7.Message.make_structs()
+
+    incoming_raw
+    |> Ack.get_ack_for_message(ack_type)
+    |> HL7.Message.make_lists()
   end
 end

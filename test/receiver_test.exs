@@ -12,6 +12,20 @@ defmodule ReceiverTest do
     refute Process.alive?(pid)
   end
 
+  test "Receiver returns application_error on junk payload" do
+    echo_fun = fn msg -> msg end
+
+    reply = MLLP.Receiver.process_message("JUNK!!!", echo_fun, MLLP.Dispatcher)
+
+    ack_hl7 =
+      reply
+      |> MLLP.Envelope.unwrap_message()
+
+    code = ack_hl7 |> HL7.Message.make_lists() |> HL7.Message.get_value("MSA", 1)
+
+    assert "AR" == code
+  end
+
   test "Extracting empty buffer returns no message and no remnant" do
     payload = ""
     assert {"", []} == Receiver.extract_messages(payload)

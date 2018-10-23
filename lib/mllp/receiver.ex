@@ -9,7 +9,7 @@ defmodule MLLP.Receiver do
   defstruct socket: nil,
             transport: nil,
             buffer: "",
-            dispatcher_module: Application.get_env(:elixir_mllp, :dispatcher_module)
+            dispatcher_module: MLLP.DefaultDispatcher
 
   @behaviour :ranch_protocol
   @sb Envelope.sb()
@@ -51,7 +51,9 @@ defmodule MLLP.Receiver do
     state = %State{
       socket: socket,
       transport: transport,
-      buffer: ""
+      buffer: "",
+      dispatcher_module:
+        Application.get_env(:elixir_mllp, :dispatcher_module, MLLP.DefaultDispatcher)
     }
 
     # http://erlang.org/doc/man/gen_server.html#enter_loop-3
@@ -100,52 +102,70 @@ defmodule MLLP.Receiver do
     {:noreply, state}
   end
 
-  def buffer_socket_data(state, data) do
+  defp buffer_socket_data(state, data) do
     Logger.debug("Receiver.process state:[#{inspect(state)}].")
     new_buffer = state.buffer <> data
     %State{state | buffer: new_buffer}
   end
 
-  def process_messages(%State{dispatcher_module: dispatcher_module} = state, socket_reply_fun) do
-    {remnant_buffer, messages} = state.buffer |> extract_messages()
-
-    messages
-    |> Enum.each(&process_message(&1, socket_reply_fun, dispatcher_module))
-
-    %State{state | buffer: remnant_buffer}
-  end
-
-  def process_message(
-        <<"MSH", _::binary>> = message,
-        socket_reply_fun,
-        dispatcher_module
-      ) do
-    result = apply(dispatcher_module, :dispatch, [message])
-
-    ack_message =
-      result
-      |> case do
-        {:ok, :application_accept} ->
-          Ack.get_ack_for_message(message, :application_accept)
-
-        {:ok, :application_reject} ->
-          Ack.get_ack_for_message(message, :application_reject)
-
-        {:ok, :application_error} ->
-          Ack.get_ack_for_message(message, :application_error)
-
-        {:error, _error_map} ->
-          Ack.get_ack_for_message(message, :application_error)
-      end
-
-    socket_reply_payload =
-      ack_message
-      |> Envelope.wrap_message()
-
-    socket_reply_fun.(socket_reply_payload)
-  end
-
   private do
+    defp process_messages(%State{dispatcher_module: dispatcher_module} = state, socket_reply_fun) do
+      {remnant_buffer, messages} = state.buffer |> extract_messages()
+
+      messages
+      |> Enum.each(&process_message(&1, socket_reply_fun, dispatcher_module))
+
+      %State{state | buffer: remnant_buffer}
+    end
+
+    defp process_message(
+           <<"MSH", _::binary>> = message,
+           socket_reply_fun,
+           dispatcher_module
+         ) do
+      result = apply(dispatcher_module, :dispatch, [message])
+
+      ack_message =
+        result
+        |> case do
+          {:ok, :application_accept} ->
+            Ack.get_ack_for_message(message, :application_accept)
+
+          {:ok, :application_reject, message} ->
+            Ack.get_ack_for_message(message, :application_reject, message)
+
+          {:ok, :application_error, message} ->
+            Ack.get_ack_for_message(message, :application_error, message)
+
+          {:error, %{type: error_type, message: error_message}} ->
+            Ack.get_ack_for_message(
+              message,
+              :application_error,
+              "(#{inspect(error_type)})" <> error_message
+            )
+        end
+
+      socket_reply_payload =
+        ack_message
+        |> Envelope.wrap_message()
+
+      socket_reply_fun.(socket_reply_payload)
+    end
+
+    defp process_message(
+           _junk_message,
+           socket_reply_fun,
+           _dispatcher_module
+         ) do
+      ack_message = Ack.get_invalid_hl7_received_ack_message()
+
+      socket_reply_payload =
+        ack_message
+        |> Envelope.wrap_message()
+
+      socket_reply_fun.(socket_reply_payload)
+    end
+
     defp extract_messages(buffer) when is_binary(buffer) do
       {remaining, messages} =
         buffer

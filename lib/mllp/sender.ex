@@ -33,15 +33,6 @@ defmodule MLLP.Sender do
     {:ok, state}
   end
 
-  def log_message(state, msg) do
-    text = "MLLP Sender: " <> get_connection_string(state) <> msg
-    Logger.warn(text)
-  end
-
-  def get_connection_string(state) do
-    "Connection: #{state.ip_address |> Tuple.to_list() |> Enum.join(".")}:#{state.port} "
-  end
-
   def handle_call({:send, _message}, _from, %State{socket: nil} = state) do
     log_message(state, " cannot send to nil socket")
     {:reply, {:ok, :application_error}, state}
@@ -77,6 +68,15 @@ defmodule MLLP.Sender do
       |> attempt_connection()
 
     {:noreply, new_state}
+  end
+
+  defp log_message(state, msg) do
+    text = "MLLP Sender: " <> get_connection_string(state) <> msg
+    Logger.warn(text)
+  end
+
+  defp get_connection_string(state) do
+    "Connection: #{state.ip_address |> Tuple.to_list() |> Enum.join(".")}:#{state.port} "
   end
 
   defp attempt_connection(%State{failures: failures} = state) do

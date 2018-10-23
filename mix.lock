@@ -1,6 +1,6 @@
 %{
   "dialyxir": {:hex, :dialyxir, "0.5.1", "b331b091720fd93e878137add264bac4f644e1ddae07a70bf7062c7862c4b952", [:mix], [], "hexpm"},
-  "elixir_hl7": {:git, "https://github.com/HCA-Healthcare/elixir-hl7.git", "1da3450f6a053bfc001c9048d7a8eb487719cec6", [tag: "v0.1.1"]},
+  "elixir_hl7": {:git, "https://github.com/HCA-Healthcare/elixir-hl7.git", "81e4a99f6d6a7624eb0ccc9848993db69ff8eb6f", [tag: "v0.1.2"]},
   "file_system": {:hex, :file_system, "0.2.6", "fd4dc3af89b9ab1dc8ccbcc214a0e60c41f34be251d9307920748a14bf41f1d3", [:mix], [], "hexpm"},
   "mix_test_watch": {:hex, :mix_test_watch, "0.9.0", "c72132a6071261893518fa08e121e911c9358713f62794a90c95db59042af375", [:mix], [{:file_system, "~> 0.2.1 or ~> 0.3", [hex: :file_system, repo: "hexpm", optional: false]}], "hexpm"},
   "private": {:hex, :private, "0.1.1", "6227bd343bebd843e62d7bc4dba8fe970aeb0f567a33cf4249b93ef6319fa90f", [:mix], [], "hexpm"},

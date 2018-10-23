@@ -3,15 +3,52 @@ defmodule MLLP.Ack do
   # # AR - Application Reject
   # # AE – Application Error
 
-  require Logger
+  @spec get_ack_for_message(String.t(), atom(), String.t()) :: String.t()
 
-  @spec get_ack_for_message(String.t(), atom()) :: String.t()
+  def get_ack_for_message(message, code, text_message \\ "")
 
-  def get_ack_for_message(message, :application_accept), do: make_ack_hl7(message, "AA")
-  def get_ack_for_message(message, :application_reject), do: make_ack_hl7(message, "AR")
-  def get_ack_for_message(message, :application_error), do: make_ack_hl7(message, "AE")
+  def get_ack_for_message(message, :application_accept, text_message),
+    do: make_ack_hl7(message, "AA", text_message)
 
-  defp make_ack_hl7(message, code) do
+  def get_ack_for_message(message, :application_reject, text_message),
+    do: make_ack_hl7(message, "AR", text_message)
+
+  def get_ack_for_message(message, :application_error, text_message),
+    do: make_ack_hl7(message, "AE", text_message)
+
+  def get_invalid_hl7_received_ack_message() do
+    message_control_id = :erlang.unique_integer() |> to_string()
+
+    msh = [
+      "MSH",
+      "|",
+      "^~\\&",
+      "????",
+      "????",
+      "????",
+      "????",
+      DateTime.utc_now() |> to_string(),
+      "",
+      "ACK^O01",
+      message_control_id,
+      "P",
+      "2.5"
+    ]
+
+    msa = ["MSA", "AR", message_control_id, "Message was not parsable as HL7"]
+
+    %HL7.Message{
+      separators: %HL7.Separators{},
+      content: [
+        msh,
+        msa
+      ],
+      status: :lists
+    }
+    |> to_string()
+  end
+
+  defp make_ack_hl7(message, code, text_message) do
     hl7 = message |> HL7.Message.new() |> HL7.Message.make_lists()
 
     sending_facility = hl7 |> HL7.Message.get_value("MSH", 4)
@@ -29,14 +66,17 @@ defmodule MLLP.Ack do
       |> List.replace_at(5, sending_app)
       |> List.replace_at(9, "ACK^O01")
 
-    msa = ["MSA", code, message_control_id]
+    msa = ["MSA", code, message_control_id, text_message]
 
-    %HL7.Message{hl7 | content: [msh, msa], status: :lists}
-    |> HL7.Message.make_raw()
-    |> to_string()
+    result =
+      %HL7.Message{hl7 | content: [msh, msa], status: :lists}
+      |> HL7.Message.make_raw()
+      |> to_string()
+
+    result
   end
 
-  def verify_ack_against_message(message, ack) do
+  def verify_ack_against_message(%HL7.Message{} = message, %HL7.Message{} = ack) do
     message_hl7 = message |> HL7.Message.make_lists()
     ack_hl7 = ack |> HL7.Message.make_lists()
 
@@ -83,5 +123,21 @@ defmodule MLLP.Ack do
            })."
        }}
     end
+  end
+
+  def verify_ack_against_message(<<"MSH", _::binary>> = message, <<"MSH", _::binary>> = ack) do
+    verify_ack_against_message(HL7.Message.new(message), ack)
+  end
+
+  def verify_ack_against_message(%HL7.Message{} = message, <<"MSH", _::binary>> = ack) do
+    verify_ack_against_message(message, HL7.Message.new(ack))
+  end
+
+  def verify_ack_against_message(<<"MSH", _::binary>> = message, %HL7.Message{} = ack) do
+    verify_ack_against_message(HL7.Message.new(message), ack)
+  end
+
+  def verify_ack_against_message(message, ack) do
+    {:ok, :application_reject}
   end
 end

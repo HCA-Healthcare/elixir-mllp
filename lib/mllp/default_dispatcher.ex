@@ -10,4 +10,14 @@ defmodule MLLP.DefaultDispatcher do
 
     {:ok, :application_accept}
   end
+
+  def dispatch(message) do
+    Logger.warn(
+      "MLLP dispatcher function not set. Default logs and discards message. Rejecting non-string message: #{
+        inspect(message)
+      }"
+    )
+
+    {:ok, :application_reject}
+  end
 end
