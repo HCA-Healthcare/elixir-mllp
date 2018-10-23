@@ -14,9 +14,9 @@ defmodule MLLP.Receiver do
   @behaviour :ranch_protocol
   @sb Envelope.sb()
 
-  def start(port) do
+  def start(port, dispatcher_module \\ MLLP.DefaultDispatcher) do
     ref = make_ref()
-    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [])
+    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module])
     {:ok, %{ref: ref, pid: pid, port: port}}
   end
 
@@ -33,16 +33,19 @@ defmodule MLLP.Receiver do
   end
 
   @doc false
-  def start_link(ref, socket, transport, _opts) do
+  def start_link(ref, socket, transport, opts) do
+    dispatcher_module = opts |> Keyword.get(:dispatcher_module)
     # the proc_lib spawn is required because of the :gen_server.enter_loop below.
-    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport]])}
+    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module]])}
   end
 
-  def init([ref, socket, transport]) do
+  def init([ref, socket, transport, dispatcher_module]) do
     Logger.debug(fn ->
-      "MLLP.Receiver initializing. ref:[#{inspect(ref)}] socket:[#{inspect(socket)}] transport:[#{
-        inspect(transport)
-      }]."
+      "MLLP.Receiver initializing.
+      ref:[#{inspect(ref)}]
+      socket:[#{inspect(socket)}]
+      transport:[#{inspect(transport)}
+      dispatcher module:[#{inspect(dispatcher_module)}]."
     end)
 
     :ok = :ranch.accept_ack(ref)
@@ -52,8 +55,7 @@ defmodule MLLP.Receiver do
       socket: socket,
       transport: transport,
       buffer: "",
-      dispatcher_module:
-        Application.get_env(:elixir_mllp, :dispatcher_module, MLLP.DefaultDispatcher)
+      dispatcher_module: dispatcher_module
     }
 
     # http://erlang.org/doc/man/gen_server.html#enter_loop-3
