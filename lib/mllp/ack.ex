@@ -137,7 +137,7 @@ defmodule MLLP.Ack do
     verify_ack_against_message(HL7.Message.new(message), ack)
   end
 
-  def verify_ack_against_message(message, ack) do
+  def verify_ack_against_message(_message, _ack) do
     {:ok, :application_reject}
   end
 end
