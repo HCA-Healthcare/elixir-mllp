@@ -21,7 +21,8 @@ defmodule AckTest do
   test "The ACK for an HL7 message has an MSH with the ACK MessageType" do
     hl7_ack = get_ack_for_wikipedia_example(:application_accept)
 
-    assert "ACK O01" == hl7_ack.message_type
+    assert "ACK" == hl7_ack.header.message_type
+    assert "O01" == hl7_ack.header.trigger_event
   end
 
   test "The ACK for an HL7 message has an MSA with the original MessageControlID" do
@@ -69,6 +70,6 @@ defmodule AckTest do
 
     incoming_raw
     |> Ack.get_ack_for_message(ack_type)
-    |> HL7.Message.make_lists()
+    |> HL7.Message.new()
   end
 end

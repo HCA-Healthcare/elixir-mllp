@@ -37,19 +37,12 @@ defmodule MLLP.Ack do
 
     msa = ["MSA", "AR", message_control_id, "Message was not parsable as HL7"]
 
-    %HL7.Message{
-      separators: %HL7.Separators{},
-      content: [
-        msh,
-        msa
-      ],
-      status: :lists
-    }
-    |> to_string()
+    HL7.Message.new([msh, msa]) |> to_string()
+
   end
 
   defp make_ack_hl7(message, code, text_message) do
-    hl7 = message |> HL7.Message.new() |> HL7.Message.make_lists()
+    hl7 = message |> HL7.Message.new()
 
     sending_facility = hl7 |> HL7.Message.get_value("MSH", 4)
     sending_app = hl7 |> HL7.Message.get_value("MSH", 3)
@@ -68,17 +61,13 @@ defmodule MLLP.Ack do
 
     msa = ["MSA", code, message_control_id, text_message]
 
-    result =
-      %HL7.Message{hl7 | content: [msh, msa], status: :lists}
-      |> HL7.Message.make_raw()
-      |> to_string()
-
-    result
+    HL7.Message.new([msh, msa]) |> to_string()
   end
 
   def verify_ack_against_message(%HL7.Message{} = message, %HL7.Message{} = ack) do
-    message_hl7 = message |> HL7.Message.make_lists()
-    ack_hl7 = ack |> HL7.Message.make_lists()
+
+    message_hl7 = message |> HL7.Message.new()
+    ack_hl7 = ack |> HL7.Message.new()
 
     message_control_id = message_hl7 |> HL7.Message.get_value("MSH", 10)
     ack_message_control_id = ack_hl7 |> HL7.Message.get_value("MSA", 2)

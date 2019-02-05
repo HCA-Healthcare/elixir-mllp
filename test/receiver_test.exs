@@ -21,7 +21,7 @@ defmodule ReceiverTest do
       reply
       |> MLLP.Envelope.unwrap_message()
 
-    code = ack_hl7 |> HL7.Message.make_lists() |> HL7.Message.get_value("MSA", 1)
+    code = ack_hl7 |> HL7.Message.new() |> HL7.Message.get_value("MSA", 1)
 
     assert "AR" == code
   end

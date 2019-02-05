@@ -34,7 +34,7 @@ defmodule MLLP.Sender do
   end
 
   def handle_call({:send, _message}, _from, %State{socket: nil} = state) do
-    log_message(state, " cannot send to nil socket")
+    log_message(state, "cannot send to nil socket")
     {:reply, {:ok, :application_error}, state}
   end
 
@@ -46,7 +46,7 @@ defmodule MLLP.Sender do
         {:reply, reply, %State{state | messages_sent: state.messages_sent + 1}}
 
       {:error, reason} ->
-        log_message(state, " could not send message, reason: " <> "#{reason}")
+        log_message(state, "could not send message, reason: " <> "#{reason}")
         new_state = maintain_reconnect_timer(state)
         reply = {:ok, :application_error}
         {:reply, reply, new_state}
@@ -93,12 +93,12 @@ defmodule MLLP.Sender do
         end
 
         new_state = %{state | failures: 0, socket: socket, pending_reconnect: nil}
-        log_message(new_state, " connected.")
+        log_message(new_state, "connected.")
         new_state
 
       {:error, reason} ->
         new_state = %{state | failures: failures + 1}
-        log_message(new_state, " could not connect, reason: " <> "#{reason}")
+        log_message(new_state, "could not connect, reason: " <> "#{reason}")
         maintain_reconnect_timer(new_state)
     end
   end
@@ -116,7 +116,7 @@ defmodule MLLP.Sender do
         Ack.verify_ack_against_message(unwrapped_message, ack)
 
       {:error, reason} ->
-        log_message(state, " could not receive ack, reason: " <> "#{reason}")
+        log_message(state, "could not receive ack, reason: " <> "#{reason}")
         maintain_reconnect_timer(state)
         {:ok, :application_error}
     end
