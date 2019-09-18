@@ -2,25 +2,25 @@ defmodule AckTest do
   use ExUnit.Case
   alias MLLP.Ack
   doctest Ack
+  import HL7.Query
 
   test "The ACK for an HL7 message that was `application_accepted`" do
     hl7_ack = get_ack_for_wikipedia_example(:application_accept)
-    assert "AA" == hl7_ack |> HL7.Message.get_value("MSA", 1)
+    assert "AA" == hl7_ack |> new() |> get_part("MSA-1")
   end
 
   test "The ACK for an HL7 message that was `application_reject`" do
     hl7_ack = get_ack_for_wikipedia_example(:application_reject)
-    assert "AR" == hl7_ack |> HL7.Message.get_value("MSA", 1)
+    assert "AR" == hl7_ack |> new() |> get_part("MSA-1")
   end
 
   test "The ACK for an HL7 message that was `application_error`" do
     hl7_ack = get_ack_for_wikipedia_example(:application_error)
-    assert "AE" == hl7_ack |> HL7.Message.get_value("MSA", 1)
+    assert "AE" == hl7_ack |> new() |> get_part("MSA-1")
   end
 
   test "The ACK for an HL7 message has an MSH with the ACK MessageType" do
     hl7_ack = get_ack_for_wikipedia_example(:application_accept)
-
     assert "ACK" == hl7_ack.header.message_type
     assert "O01" == hl7_ack.header.trigger_event
   end
@@ -28,16 +28,16 @@ defmodule AckTest do
   test "The ACK for an HL7 message has an MSA with the original MessageControlID" do
     hl7_ack = get_ack_for_wikipedia_example(:application_accept)
 
-    assert "01052901" == hl7_ack |> HL7.Message.get_value("MSA", 2)
+    assert "01052901" == hl7_ack |> new() |> get_part("MSA-2")
   end
 
   test "The ACK for an HL7 message has an MSH with the sender and receiver fields reversed" do
     hl7_ack = get_ack_for_wikipedia_example(:application_accept)
 
-    assert "MegaReg" == hl7_ack |> HL7.Message.get_value("MSH", 5)
-    assert "XYZHospC" == hl7_ack |> HL7.Message.get_value("MSH", 6)
-    assert "SuperOE" == hl7_ack |> HL7.Message.get_value("MSH", 3)
-    assert "XYZImgCtr" == hl7_ack |> HL7.Message.get_value("MSH", 4)
+    assert "MegaReg" == hl7_ack |> new() |> get_part("MSH-5")
+    assert "XYZHospC" == hl7_ack |> new() |> get_part("MSH-6")
+    assert "SuperOE" == hl7_ack |> new() |> get_part("MSH-3")
+    assert "XYZImgCtr" == hl7_ack |> new() |> get_part("MSH-4")
   end
 
   test "The `verify_ack_against_message` accepts good ACK messages" do

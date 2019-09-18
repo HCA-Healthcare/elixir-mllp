@@ -43,20 +43,15 @@ defmodule MLLP.Ack do
 
   defp make_ack_hl7(message, code, text_message) do
     hl7 = message |> HL7.Message.new()
-
-    sending_facility = hl7 |> HL7.Message.get_value("MSH", 4)
-    sending_app = hl7 |> HL7.Message.get_value("MSH", 3)
-    receiving_facility = hl7 |> HL7.Message.get_value("MSH", 6)
-    receiving_app = hl7 |> HL7.Message.get_value("MSH", 5)
-    message_control_id = hl7 |> HL7.Message.get_value("MSH", 10)
+    %HL7.Header{receiving_application: receiving_application, receiving_facility: receiving_facility, sending_application: sending_application, sending_facility: sending_facility, message_control_id: message_control_id} = hl7.header
 
     msh =
       hl7
-      |> HL7.Message.get_segment("MSH")
+      |> HL7.Message.find("MSH")
       |> List.replace_at(4, receiving_facility)
       |> List.replace_at(6, sending_facility)
-      |> List.replace_at(3, receiving_app)
-      |> List.replace_at(5, sending_app)
+      |> List.replace_at(3, receiving_application)
+      |> List.replace_at(5, sending_application)
       |> List.replace_at(9, "ACK^O01")
 
     msa = ["MSA", code, message_control_id, text_message]
@@ -67,16 +62,16 @@ defmodule MLLP.Ack do
   def verify_ack_against_message(%HL7.Message{} = message, %HL7.Message{} = ack) do
 
     message_hl7 = message |> HL7.Message.new()
-    ack_hl7 = ack |> HL7.Message.new()
+    message_header = message_hl7.header
+    ack_msa = ack |> HL7.Message.new() |> HL7.Message.find("MSA")
 
-    message_control_id = message_hl7 |> HL7.Message.get_value("MSH", 10)
-    ack_message_control_id = ack_hl7 |> HL7.Message.get_value("MSA", 2)
+    message_control_id = message_header.message_control_id
+    ack_message_control_id = ack_msa |> HL7.Segment.get_part(2)
+    ack_result = ack_msa |> HL7.Segment.get_part(1)
 
-    # todo make strict matching options
     if String.contains?(ack_message_control_id, message_control_id) do
-      ack_hl7
-      |> HL7.Message.get_value("MSA", 1)
-      |> case do
+
+      case ack_result do
         "AA" ->
           {:ok, :application_accept}
 

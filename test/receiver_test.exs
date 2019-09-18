@@ -3,6 +3,8 @@ defmodule ReceiverTest do
   alias MLLP.Receiver
   doctest Receiver
 
+  import HL7.Query
+
   def make_msg(body), do: MLLP.Envelope.sb() <> body <> MLLP.Envelope.eb_cr()
 
   test "Start and stop an MMLP Receiver on a specific port" do
@@ -21,7 +23,7 @@ defmodule ReceiverTest do
       reply
       |> MLLP.Envelope.unwrap_message()
 
-    code = ack_hl7 |> HL7.Message.new() |> HL7.Message.get_value("MSA", 1)
+    code = ack_hl7 |> new() |> get_part("MSA-1")
 
     assert "AR" == code
   end
@@ -63,6 +65,5 @@ defmodule ReceiverTest do
 
     assert {"", ["MSH|blah"]} == Receiver.extract_messages(payload)
   end
-
 
 end
