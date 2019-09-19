@@ -1,6 +1,6 @@
 %{
   "dialyxir": {:hex, :dialyxir, "0.5.1", "b331b091720fd93e878137add264bac4f644e1ddae07a70bf7062c7862c4b952", [:mix], [], "hexpm"},
-  "elixir_hl7": {:hex, :elixir_hl7, "0.3.4", "83b48f5bf74b6bc4547e0f3023d6dcb6865bb113e1c8ac2404b06952de93ed5b", [:mix], [], "hexpm"},
+  "elixir_hl7": {:hex, :elixir_hl7, "0.3.5", "eafafa8ccdefbb444601992d65340d6aa881a75ef1c47b88569b3402ed1787a7", [:mix], [], "hexpm"},
   "file_system": {:hex, :file_system, "0.2.6", "fd4dc3af89b9ab1dc8ccbcc214a0e60c41f34be251d9307920748a14bf41f1d3", [:mix], [], "hexpm"},
   "mix_test_watch": {:hex, :mix_test_watch, "0.9.0", "c72132a6071261893518fa08e121e911c9358713f62794a90c95db59042af375", [:mix], [{:file_system, "~> 0.2.1 or ~> 0.3", [hex: :file_system, repo: "hexpm", optional: false]}], "hexpm"},
   "private": {:hex, :private, "0.1.1", "6227bd343bebd843e62d7bc4dba8fe970aeb0f567a33cf4249b93ef6319fa90f", [:mix], [], "hexpm"},
