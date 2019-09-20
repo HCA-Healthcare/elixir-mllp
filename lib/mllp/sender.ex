@@ -18,6 +18,10 @@ defmodule MLLP.Sender do
     GenServer.start_link(__MODULE__, {ip_address, port})
   end
 
+  def stop(pid) do
+    GenServer.stop(pid)
+  end
+
   def send_message(pid, message) do
     wrapped_message = Envelope.wrap_message(message)
     GenServer.call(pid, {:send, wrapped_message}, 30_000)
@@ -68,6 +72,16 @@ defmodule MLLP.Sender do
       |> attempt_connection()
 
     {:noreply, new_state}
+  end
+
+  def terminate(_reason, state) do
+    log_message(state, "stopping sender")
+
+    if state.socket != nil do
+      :gen_tcp.close(state.socket)
+    end
+
+    Process.cancel_timer(state.pending_reconnect)
   end
 
   defp log_message(state, msg) do
