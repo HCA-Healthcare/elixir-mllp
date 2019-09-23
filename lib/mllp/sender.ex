@@ -9,7 +9,7 @@ defmodule MLLP.Sender do
             port: 0,
             messages_sent: 0,
             failures: 0,
-            pending_reconnect: nil
+            pending_reconnect_timer: nil
 
   alias __MODULE__, as: State
 
@@ -68,7 +68,7 @@ defmodule MLLP.Sender do
 
   def handle_info(:timeout, state) do
     new_state =
-      %State{state | pending_reconnect: nil}
+      %State{state | pending_reconnect_timer: nil}
       |> attempt_connection()
 
     {:noreply, new_state}
@@ -81,7 +81,7 @@ defmodule MLLP.Sender do
       :gen_tcp.close(state.socket)
     end
 
-    Process.cancel_timer(state.pending_reconnect)
+    cancel_timer(state.pending_reconnect_timer)
   end
 
   defp log_message(state, msg) do
@@ -102,11 +102,9 @@ defmodule MLLP.Sender do
     )
     |> case do
       {:ok, socket} ->
-        if state.pending_reconnect do
-          Process.cancel_timer(state.pending_reconnect)
-        end
+        cancel_timer(state.pending_reconnect_timer)
 
-        new_state = %{state | failures: 0, socket: socket, pending_reconnect: nil}
+        new_state = %{state | failures: 0, socket: socket, pending_reconnect_timer: nil}
         log_message(new_state, "connected.")
         new_state
 
@@ -118,8 +116,8 @@ defmodule MLLP.Sender do
   end
 
   defp maintain_reconnect_timer(state) do
-    ref = state.pending_reconnect || Process.send_after(self(), :timeout, 1000)
-    %State{state | pending_reconnect: ref}
+    ref = state.pending_reconnect_timer || Process.send_after(self(), :timeout, 1000)
+    %State{state | pending_reconnect_timer: ref}
   end
 
   defp receive_ack_for_message(state, message) do
@@ -133,6 +131,12 @@ defmodule MLLP.Sender do
         log_message(state, "could not receive ack, reason: " <> "#{reason}")
         maintain_reconnect_timer(state)
         {:ok, :application_error}
+    end
+  end
+
+  def cancel_timer(timer_ref) do
+    if timer_ref != nil do
+      Process.cancel_timer(timer_ref)
     end
   end
 end
