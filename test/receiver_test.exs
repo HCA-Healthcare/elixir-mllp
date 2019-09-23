@@ -11,7 +11,10 @@ defmodule ReceiverTest do
     port = 8129
     {:ok, %{pid: pid}} = MLLP.Receiver.start(port)
     :ok = MLLP.Receiver.stop(port)
+
     refute Process.alive?(pid)
+
+    {:ok, %{pid: _new_pid}} = MLLP.Receiver.start(port)
   end
 
   test "Receiver returns application_error on junk payload" do
@@ -65,5 +68,4 @@ defmodule ReceiverTest do
 
     assert {"", ["MSH|blah"]} == Receiver.extract_messages(payload)
   end
-
 end
