@@ -122,7 +122,7 @@ defmodule MLLP.Sender do
     )
     |> case do
       {:ok, socket} ->
-        if state.pending_reconnect do
+        if state.pending_reconnect != nil do
           Process.cancel_timer(state.pending_reconnect)
         end
 
