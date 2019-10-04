@@ -21,12 +21,14 @@ defmodule MLLP.Receiver do
   @behaviour :ranch_protocol
   @sb Envelope.sb()
 
+  @spec start(any, any) :: {:ok, %{pid: :undefined | pid, port: any, ref: any}}
   def start(port, dispatcher_module \\ MLLP.DefaultDispatcher) do
     ref = make_ref()
     {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module])
     {:ok, %{ref: ref, pid: pid, port: port}}
   end
 
+  @spec stop(any) :: :ok | {:error, :not_found}
   def stop(port) do
     ref = get_ref_by_port(port)
     :ranch.stop_listener(ref)
