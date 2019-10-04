@@ -3,6 +3,8 @@ defmodule MLLP.Ack do
   # # AR - Application Reject
   # # AE – Application Error
 
+  @type dispatcher_result :: {:ok, :application_accept | :application_error | :application_reject}
+
   @spec get_ack_for_message(String.t(), atom(), String.t()) :: String.t()
 
   def get_ack_for_message(message, code, text_message \\ "")
@@ -16,6 +18,7 @@ defmodule MLLP.Ack do
   def get_ack_for_message(message, :application_error, text_message),
     do: make_ack_hl7(message, "AE", text_message)
 
+  @spec get_invalid_hl7_received_ack_message :: binary
   def get_invalid_hl7_received_ack_message() do
     message_control_id = :erlang.unique_integer() |> to_string()
 
@@ -41,6 +44,7 @@ defmodule MLLP.Ack do
 
   end
 
+  @spec make_ack_hl7(String.t(), atom(), String.t()) :: binary()
   defp make_ack_hl7(message, code, text_message) do
     hl7 = message |> HL7.Message.new()
     %HL7.Header{receiving_application: receiving_application, receiving_facility: receiving_facility, sending_application: sending_application, sending_facility: sending_facility, message_control_id: message_control_id} = hl7.header
@@ -59,6 +63,7 @@ defmodule MLLP.Ack do
     HL7.Message.new([msh, msa]) |> to_string()
   end
 
+  @spec verify_ack_against_message(binary() | any, binary() | any) :: {:error, %{message: <<_::64, _::_*8>>, type: :bad_ack_code | :bad_message_control_id}} | dispatcher_result()
   def verify_ack_against_message(%HL7.Message{} = message, %HL7.Message{} = ack) do
 
     message_hl7 = message |> HL7.Message.new()

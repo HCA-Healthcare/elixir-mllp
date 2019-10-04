@@ -4,6 +4,21 @@ defmodule MLLP.Sender do
 
   alias MLLP.{Envelope, Ack}
 
+  @type pid_ref :: atom | pid | {atom, any} | {:via, atom, any}
+  @type ip_address :: atom | charlist
+           | {:local, binary | charlist}
+           | {byte, byte, byte, byte}
+           | {char, char, char, char, char, char, char, char }
+
+  @type t :: %MLLP.Sender{
+    socket: any(),
+    ip_address: ip_address(),
+    port: char(),
+    messages_sent: integer(),
+    failures: integer(),
+    pending_reconnect: any()
+  }
+
   defstruct socket: nil,
             ip_address: {0, 0, 0, 0},
             port: 0,
@@ -14,24 +29,29 @@ defmodule MLLP.Sender do
   alias __MODULE__, as: State
 
   ## API
+  @spec start_link({ip_address(), char}) :: {:ok, pid} | {:error, any} | :ignore
   def start_link({ip_address, port}) do
     GenServer.start_link(__MODULE__, {ip_address, port})
   end
 
+  @spec stop(pid_ref()) :: :ok
   def stop(pid) do
     GenServer.stop(pid)
   end
 
+  @spec send_message(pid_ref(), binary()) :: any()
   def send_message(pid, message) do
     wrapped_message = Envelope.wrap_message(message)
     GenServer.call(pid, {:send, wrapped_message}, 30_000)
   end
 
+  @spec get_messages_sent(pid_ref()) :: any
   def get_messages_sent(pid) do
     GenServer.call(pid, :get_messages_sent_count)
   end
 
   ## GenServer callbacks
+  @spec init({ip_address(), char}) :: {:ok, MLLP.Sender.t()}
   def init({ip_address, port}) do
     state = attempt_connection(%State{ip_address: ip_address, port: port})
     {:ok, state}

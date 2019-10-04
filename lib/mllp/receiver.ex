@@ -6,6 +6,13 @@ defmodule MLLP.Receiver do
   use Private
   require Logger
 
+  @type dispatcher :: any()
+  @type t :: %MLLP.Receiver{
+      socket: any(),
+      transport: any(),
+      buffer: String.t(),
+      dispatcher_module: dispatcher()
+  }
   defstruct socket: nil,
             transport: nil,
             buffer: "",
@@ -39,6 +46,7 @@ defmodule MLLP.Receiver do
     {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module]])}
   end
 
+  @spec init([...]) :: any
   def init([ref, socket, transport, dispatcher_module]) do
     Logger.debug(fn ->
       "MLLP.Receiver initializing.
