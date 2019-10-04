@@ -59,6 +59,7 @@ defmodule MLLP.Receiver do
     end
   end
 
+  @spec stop(any) :: :ok | {:error, :not_found}
   def stop(port) do
     receiver_id = get_receiver_id_by_port(port)
 
