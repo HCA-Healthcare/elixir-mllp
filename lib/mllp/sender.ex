@@ -43,9 +43,12 @@ defmodule MLLP.Sender do
   end
 
   def handle_call({:send, message}, _from, state) do
+    IO.puts("sending.... ")
+
     :gen_tcp.send(state.socket, message)
     |> case do
       :ok ->
+#        IO.inspect("sent: #{inspect(message)}")
         reply = receive_ack_for_message(state, message)
         {:reply, reply, %State{state | messages_sent: state.messages_sent + 1}}
 
@@ -93,6 +96,9 @@ defmodule MLLP.Sender do
     "Connection: #{state.ip_address |> Tuple.to_list() |> Enum.join(".")}:#{state.port} "
   end
 
+  # 0 | 1 | 2 | 4 | raw | sunrm | asn1 | cdr | fcgi | line |
+  #     tpkt | http | httph | http_bin | httph_bin
+
   defp attempt_connection(%State{failures: failures} = state) do
     :gen_tcp.connect(
       state.ip_address,
@@ -127,6 +133,7 @@ defmodule MLLP.Sender do
       {:ok, raw_ack} ->
         ack = raw_ack |> Envelope.unwrap_message()
         unwrapped_message = message |> Envelope.unwrap_message()
+        IO.puts("ack: #{inspect(ack)}")
         Ack.verify_ack_against_message(unwrapped_message, ack)
 
       {:error, reason} ->
@@ -135,4 +142,5 @@ defmodule MLLP.Sender do
         {:ok, :application_error}
     end
   end
+
 end
