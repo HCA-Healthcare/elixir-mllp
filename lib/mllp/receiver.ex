@@ -9,14 +9,15 @@ defmodule MLLP.Receiver do
   defstruct socket: nil,
             transport: nil,
             buffer: "",
-            dispatcher_module: MLLP.DefaultDispatcher
+            dispatcher_module: MLLP.DefaultDispatcher,
+            ack: true
 
   @behaviour :ranch_protocol
   @sb Envelope.sb()
 
-  def start(port, dispatcher_module \\ MLLP.DefaultDispatcher) do
+  def start(port, dispatcher_module \\ MLLP.DefaultDispatcher, ack \\ true) do
     ref = make_ref()
-    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module])
+    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module, ack: ack])
     {:ok, %{ref: ref, pid: pid, port: port}}
   end
 
@@ -35,16 +36,19 @@ defmodule MLLP.Receiver do
   @doc false
   def start_link(ref, socket, transport, opts) do
     dispatcher_module = opts |> Keyword.get(:dispatcher_module)
+    ack = opts |> Keyword.get(:ack)
+
     # the proc_lib spawn is required because of the :gen_server.enter_loop below.
-    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module]])}
+    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module, ack]])}
   end
 
-  def init([ref, socket, transport, dispatcher_module]) do
+  def init([ref, socket, transport, dispatcher_module, ack]) do
     Logger.debug(fn ->
       "MLLP.Receiver initializing.
       ref:[#{inspect(ref)}]
       socket:[#{inspect(socket)}]
       transport:[#{inspect(transport)}
+      ack:[#{inspect(ack)}]
       dispatcher module:[#{inspect(dispatcher_module)}]."
     end)
 
@@ -55,7 +59,8 @@ defmodule MLLP.Receiver do
       socket: socket,
       transport: transport,
       buffer: "",
-      dispatcher_module: dispatcher_module
+      dispatcher_module: dispatcher_module,
+      ack: ack
     }
 
     # http://erlang.org/doc/man/gen_server.html#enter_loop-3
@@ -111,11 +116,11 @@ defmodule MLLP.Receiver do
   end
 
   private do
-    defp process_messages(%State{dispatcher_module: dispatcher_module} = state, socket_reply_fun) do
+    defp process_messages(%State{dispatcher_module: dispatcher_module, ack: ack} = state, socket_reply_fun) do
       {remnant_buffer, messages} = state.buffer |> extract_messages()
 
       messages
-      |> Enum.each(&process_message(&1, socket_reply_fun, dispatcher_module))
+      |> Enum.each(&process_message(&1, socket_reply_fun, dispatcher_module, ack))
 
       %State{state | buffer: remnant_buffer}
     end
@@ -123,41 +128,45 @@ defmodule MLLP.Receiver do
     defp process_message(
            <<"MSH", _::binary>> = message,
            socket_reply_fun,
-           dispatcher_module
+           dispatcher_module,
+           ack
          ) do
       result = apply(dispatcher_module, :dispatch, [message])
+      if ack do
+        Logger.info("prepare ack message")
+        ack_message =
+          result
+          |> case do
+            {:ok, :application_accept} ->
+              Ack.get_ack_for_message(message, :application_accept)
 
-      ack_message =
-        result
-        |> case do
-          {:ok, :application_accept} ->
-            Ack.get_ack_for_message(message, :application_accept)
+            {:ok, :application_reject, message} ->
+              Ack.get_ack_for_message(message, :application_reject, message)
 
-          {:ok, :application_reject, message} ->
-            Ack.get_ack_for_message(message, :application_reject, message)
+            {:ok, :application_error, message} ->
+              Ack.get_ack_for_message(message, :application_error, message)
 
-          {:ok, :application_error, message} ->
-            Ack.get_ack_for_message(message, :application_error, message)
+            {:error, %{type: error_type, message: error_message}} ->
+              Ack.get_ack_for_message(
+                message,
+                :application_error,
+                "(#{inspect(error_type)})" <> error_message
+              )
+          end
 
-          {:error, %{type: error_type, message: error_message}} ->
-            Ack.get_ack_for_message(
-              message,
-              :application_error,
-              "(#{inspect(error_type)})" <> error_message
-            )
-        end
+        socket_reply_payload =
+          ack_message
+          |> Envelope.wrap_message()
 
-      socket_reply_payload =
-        ack_message
-        |> Envelope.wrap_message()
-
-      socket_reply_fun.(socket_reply_payload)
+        socket_reply_fun.(socket_reply_payload)
+      end
     end
 
     defp process_message(
            _junk_message,
            socket_reply_fun,
-           _dispatcher_module
+           _dispatcher_module,
+           _ack
          ) do
       ack_message = Ack.get_invalid_hl7_received_ack_message()
 
