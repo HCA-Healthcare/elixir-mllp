@@ -27,6 +27,11 @@ defmodule MLLP.Sender do
     GenServer.call(pid, {:send, wrapped_message}, 30_000)
   end
 
+  def async_send_message(pid, message) do
+    wrapped_message = Envelope.wrap_message(message)
+    GenServer.cast(pid, {:send, wrapped_message})
+  end
+
   def get_messages_sent(pid) do
     GenServer.call(pid, :get_messages_sent_count)
   end
@@ -35,6 +40,16 @@ defmodule MLLP.Sender do
   def init({ip_address, port}) do
     state = attempt_connection(%State{ip_address: ip_address, port: port})
     {:ok, state}
+  end
+
+  def handle_cast({:send, _message}, _from, %State{socket: nil} = state) do
+    log_message(state, "cannot send to nil socket")
+    {:noreply, state}
+  end
+
+  def handle_cast({:send, message}, _from, state) do
+    :gen_tcp.send(state.socket, message)
+    {:noreply, state}
   end
 
   def handle_call({:send, _message}, _from, %State{socket: nil} = state) do

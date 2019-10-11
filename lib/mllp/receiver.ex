@@ -129,7 +129,7 @@ defmodule MLLP.Receiver do
            <<"MSH", _::binary>> = message,
            socket_reply_fun,
            dispatcher_module,
-           ack
+           ack \\ true
          ) do
       result = apply(dispatcher_module, :dispatch, [message])
       if ack do

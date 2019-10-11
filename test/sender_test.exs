@@ -20,6 +20,16 @@ defmodule SenderTest do
     refute Process.alive?(pid)
   end
 
+  test "Integration: sending valid HL7 with without ACK" do
+    port = 8131
+    {:ok, %{pid: pid}} = Receiver.start(port, SenderTest.TestDispatcher, false)
+    {:ok, sender_pid} = Sender.start_link({{127, 0, 0, 1}, port})
+    hl7 = HL7.Examples.wikipedia_sample_hl7()
+    assert Sender.async_send_message(sender_pid, hl7) == :ok
+    :ok = MLLP.Receiver.stop(port)
+    refute Process.alive?(pid)
+  end
+
   test "Integration: sending valid HL7 with no receiver" do
     port = 8131
 
