@@ -37,26 +37,31 @@ defmodule MLLP.Sender do
   end
 
   ## GenServer callbacks
+  @impl true
   def init({ip_address, port}) do
     state = attempt_connection(%State{ip_address: ip_address, port: port})
     {:ok, state}
   end
 
-  def handle_cast({:send, _message}, _from, %State{socket: nil} = state) do
+  @impl true
+  def handle_cast({:send, _message}, %State{socket: nil} = state) do
     log_message(state, "cannot send to nil socket")
     {:noreply, state}
   end
 
-  def handle_cast({:send, message}, _from, state) do
+  @impl true
+  def handle_cast({:send, message}, state) do
     :gen_tcp.send(state.socket, message)
     {:noreply, state}
   end
 
+  @impl true
   def handle_call({:send, _message}, _from, %State{socket: nil} = state) do
     log_message(state, "cannot send to nil socket")
     {:reply, {:ok, :application_error}, state}
   end
 
+  @impl true
   def handle_call({:send, message}, _from, state) do
     :gen_tcp.send(state.socket, message)
     |> case do
@@ -72,15 +77,18 @@ defmodule MLLP.Sender do
     end
   end
 
+  @impl true
   def handle_call(:get_messages_sent_count, _reply, state) do
     {:reply, state.messages_sent, state}
   end
 
+  @impl true
   def handle_info({:tcp_closed, _socket}, state) do
     new_state = maintain_reconnect_timer(state)
     {:noreply, new_state}
   end
 
+  @impl true
   def handle_info(:timeout, state) do
     new_state =
       %State{state | pending_reconnect: nil}
@@ -89,6 +97,7 @@ defmodule MLLP.Sender do
     {:noreply, new_state}
   end
 
+  @impl true
   def terminate(_reason, state) do
     log_message(state, "stopping sender")
 

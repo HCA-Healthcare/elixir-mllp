@@ -138,6 +138,12 @@ defmodule MLLP.Receiver do
     end
 
     defp process_message(
+           _junk_message,
+           socket_reply_fun,
+           _dispatcher_module,
+           _ack \\ true
+        ) 
+    defp process_message(
            <<"MSH", _::binary>> = message,
            socket_reply_fun,
            dispatcher_module,
