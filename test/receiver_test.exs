@@ -17,7 +17,7 @@ defmodule ReceiverTest do
   test "Receiver returns application_error on junk payload" do
     echo_fun = fn msg -> msg end
 
-    reply = MLLP.Receiver.process_message("JUNK!!!", echo_fun, MLLP.Dispatcher)
+    reply = MLLP.Receiver.process_message("JUNK!!!", echo_fun, MLLP.Dispatcher, true)
 
     ack_hl7 =
       reply
