@@ -17,7 +17,13 @@ defmodule MLLP.Receiver do
 
   def start(port, dispatcher_module \\ MLLP.DefaultDispatcher, ack \\ true) do
     ref = make_ref()
-    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module, ack: ack])
+
+    {:ok, pid} =
+      :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver,
+        dispatcher_module: dispatcher_module,
+        ack: ack
+      )
+
     {:ok, %{ref: ref, pid: pid, port: port}}
   end
 
@@ -39,7 +45,10 @@ defmodule MLLP.Receiver do
     ack = opts |> Keyword.get(:ack)
 
     # the proc_lib spawn is required because of the :gen_server.enter_loop below.
-    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module, ack]])}
+    {:ok,
+     :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [
+       [ref, socket, transport, dispatcher_module, ack]
+     ])}
   end
 
   def init([ref, socket, transport, dispatcher_module, ack]) do
@@ -116,7 +125,10 @@ defmodule MLLP.Receiver do
   end
 
   private do
-    defp process_messages(%State{dispatcher_module: dispatcher_module, ack: ack} = state, socket_reply_fun) do
+    defp process_messages(
+           %State{dispatcher_module: dispatcher_module, ack: ack} = state,
+           socket_reply_fun
+         ) do
       {remnant_buffer, messages} = state.buffer |> extract_messages()
 
       messages
@@ -129,11 +141,13 @@ defmodule MLLP.Receiver do
            <<"MSH", _::binary>> = message,
            socket_reply_fun,
            dispatcher_module,
-           ack \\ true
+           ack
          ) do
       result = apply(dispatcher_module, :dispatch, [message])
+
       if ack do
         Logger.info("prepare ack message")
+
         ack_message =
           result
           |> case do

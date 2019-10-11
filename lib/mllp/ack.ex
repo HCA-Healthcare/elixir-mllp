@@ -38,12 +38,18 @@ defmodule MLLP.Ack do
     msa = ["MSA", "AR", message_control_id, "Message was not parsable as HL7"]
 
     HL7.Message.new([msh, msa]) |> to_string()
-
   end
 
   defp make_ack_hl7(message, code, text_message) do
     hl7 = message |> HL7.Message.new()
-    %HL7.Header{receiving_application: receiving_application, receiving_facility: receiving_facility, sending_application: sending_application, sending_facility: sending_facility, message_control_id: message_control_id} = hl7.header
+
+    %HL7.Header{
+      receiving_application: receiving_application,
+      receiving_facility: receiving_facility,
+      sending_application: sending_application,
+      sending_facility: sending_facility,
+      message_control_id: message_control_id
+    } = hl7.header
 
     msh =
       hl7
@@ -60,7 +66,6 @@ defmodule MLLP.Ack do
   end
 
   def verify_ack_against_message(%HL7.Message{} = message, %HL7.Message{} = ack) do
-
     message_hl7 = message |> HL7.Message.new()
     message_header = message_hl7.header
     ack_msa = ack |> HL7.Message.new() |> HL7.Message.find("MSA")
@@ -70,7 +75,6 @@ defmodule MLLP.Ack do
     ack_result = ack_msa |> HL7.Segment.get_part(1)
 
     if String.contains?(ack_message_control_id, message_control_id) do
-
       case ack_result do
         "AA" ->
           {:ok, :application_accept}
