@@ -14,9 +14,6 @@ defmodule ReceiverTest do
     refute Process.alive?(pid)
   end
 
-  test "Receive don't send ack message back" do
-
-  end
   test "Receiver returns application_error on junk payload" do
     echo_fun = fn msg -> msg end
 
