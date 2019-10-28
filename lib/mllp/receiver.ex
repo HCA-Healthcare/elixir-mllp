@@ -16,7 +16,12 @@ defmodule MLLP.Receiver do
 
   def start(port, dispatcher_module \\ MLLP.DefaultDispatcher) do
     ref = make_ref()
-    {:ok, pid} = :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver, [dispatcher_module: dispatcher_module])
+
+    {:ok, pid} =
+      :ranch.start_listener(ref, :ranch_tcp, [port: port], MLLP.Receiver,
+        dispatcher_module: dispatcher_module
+      )
+
     {:ok, %{ref: ref, pid: pid, port: port}}
   end
 
@@ -36,7 +41,10 @@ defmodule MLLP.Receiver do
   def start_link(ref, socket, transport, opts) do
     dispatcher_module = opts |> Keyword.get(:dispatcher_module)
     # the proc_lib spawn is required because of the :gen_server.enter_loop below.
-    {:ok, :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [[ref, socket, transport, dispatcher_module]])}
+    {:ok,
+     :proc_lib.spawn_link(Elixir.MLLP.Receiver, :init, [
+       [ref, socket, transport, dispatcher_module]
+     ])}
   end
 
   def init([ref, socket, transport, dispatcher_module]) do
