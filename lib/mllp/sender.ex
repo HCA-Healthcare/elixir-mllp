@@ -81,7 +81,7 @@ defmodule MLLP.Sender do
       :gen_tcp.close(state.socket)
     end
 
-    Process.cancel_timer(state.pending_reconnect)
+    if state.pending_reconnect, do: Process.cancel_timer(state.pending_reconnect)
   end
 
   defp log_message(state, msg) do

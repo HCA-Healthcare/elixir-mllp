@@ -23,7 +23,7 @@ defmodule MLLP.MixProject do
   defp deps do
     [
       {:ranch, "~> 1.6"},
-      {:elixir_hl7, "~> 0.4.0"},
+      {:elixir_hl7, "~> 0.5.0"},
       {:dialyxir, "~> 0.5.1", only: [:dev], runtime: false},
       {:mix_test_watch, "~> 0.9.0", only: :dev, runtime: false},
       {:private, "~> 0.1.1", runtime: false}
