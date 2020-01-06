@@ -28,6 +28,15 @@ MLLP.Sender.send_message(s1, HL7.Examples.wikipedia_sample_hl7())
 
 ```
 
+Telemetry (Sender only currently)
+
+Can be namespaced or changed by passing a replacement for DefaultTelemetry.
+
+The default emits `[:mllp, :sender, :status | :sending | :received]` telemetry events.
+Emitted measurements contain status, errors, timestamps, etc.
+The emitted metadata contains the Sender state.
+
+
 ## License
 
 Elixir-MLLP source code is released under Apache 2 License. Check LICENSE file for more information.

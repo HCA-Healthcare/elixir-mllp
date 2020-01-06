@@ -3,21 +3,21 @@ defmodule MLLP.DefaultDispatcher do
 
   @behaviour MLLP.Dispatcher
 
-  def dispatch(message) when is_binary(message) do
-    Logger.warn(
-      "MLLP dispatcher function not set. Default logs and discards message. Message: #{message}"
-    )
-
-    {:ok, :application_accept}
-  end
-
-  def dispatch(message) do
-    Logger.warn(
-      "MLLP dispatcher function not set. Default logs and discards message. Rejecting non-string message: #{
-        inspect(message)
+  def dispatch(:mllp_hl7, message, state) when is_binary(message) do
+    Logger.error(
+      "MLLP.Dispatcher not set. The DefaultDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{
+        message
       }"
     )
 
-    {:ok, :application_reject}
+    reply =
+      MLLP.Ack.get_ack_for_message(
+        message,
+        :application_reject,
+        "A real MLLP message dispatcher was not provided"
+      )
+      |> to_string()
+
+    {:ok, %{state | reply_buffer: reply}}
   end
 end
