@@ -65,7 +65,7 @@ defmodule ReceiverTest do
 
       port = 8133
 
-      {:ok, %{pid: _pid}} = Receiver.start(port, MLLP.PacketFramerMock, MLLP.DispatcherMock)
+      {:ok, %{pid: _pid}} = Receiver.start(port, MLLP.DispatcherMock, MLLP.PacketFramerMock)
 
       tcp_connect_send_and_close(port, message)
       assert_receive :got_it
@@ -97,6 +97,35 @@ defmodule ReceiverTest do
         end)
 
       assert log =~ "unexpected message: \"junky junk\""
+    end
+
+    test "opens a port that can be connected to by two senders" do
+      port = 8136
+      {:ok, %{pid: pid}} = Receiver.start(port)
+
+      log =
+        capture_log(fn ->
+          {:ok, sock1} =
+            :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, {:packet, 0}, {:active, false}])
+
+          {:ok, sock2} =
+            :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, {:packet, 0}, {:active, false}])
+
+          :ok = :gen_tcp.send(sock1, "AAAA")
+          :ok = :gen_tcp.send(sock2, "BBBB")
+          :ok = :gen_tcp.send(sock1, "CCCC")
+          :ok = :gen_tcp.send(sock2, "DDDD")
+
+          Process.sleep(100)
+        end)
+
+      assert log =~ "AAAA"
+      assert log =~ "BBBB"
+      assert log =~ "CCCC"
+      assert log =~ "DDDD"
+
+      assert Process.alive?(pid)
+      :ok = Receiver.stop(port)
     end
   end
 

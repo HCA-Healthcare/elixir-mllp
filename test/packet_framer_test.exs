@@ -33,14 +33,15 @@ defmodule MLLP.PacketFramerTest do
     end
 
     test "half message in MLLP blocks" do
-      packet = @mllp_start_of_block <> "message is incomple"
+      message = "message is incomple"
+      packet = @mllp_start_of_block <> message
       state = %FramingContext{dispatcher_module: MLLP.DispatcherMock}
 
       MLLP.DispatcherMock
       |> expect(:dispatch, 0, fn _, _, state -> {:ok, state} end)
 
       {:ok, new_state} = DefaultPacketFramer.handle_packet(packet, state)
-      assert packet == new_state.receiver_buffer
+      assert message == new_state.receiver_buffer
     end
 
     test "message and a half in MLLP blocks" do
@@ -59,7 +60,11 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state} = DefaultPacketFramer.handle_packet(packet, state)
 
-      assert %{state | receiver_buffer: @mllp_start_of_block <> leftover} == new_state
+      assert %{
+               state
+               | receiver_buffer: leftover,
+                 current_message_type: :mllp
+             } == new_state
     end
 
     test "multiple complete messages in MLLP blocks" do
@@ -109,7 +114,11 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state} = DefaultPacketFramer.handle_packet(packet, state)
 
-      assert %{state | receiver_buffer: @mllp_start_of_block <> partial} == new_state
+      assert %{
+               state
+               | receiver_buffer: partial,
+                 current_message_type: :mllp
+             } == new_state
     end
 
     test "simple HL7 message" do
@@ -178,7 +187,11 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state} = ExtendedFramer.handle_packet(packet, state)
 
-      assert %{state | receiver_buffer: @mllp_start_of_block <> "Blah blah"} == new_state
+      assert %{
+               state
+               | receiver_buffer: "Blah blah",
+                 current_message_type: :mllp
+             } == new_state
     end
 
     test "custom block followed by mllp hl7 block followed by partial mllp" do
@@ -200,19 +213,27 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state} = ExtendedFramer.handle_packet(packet, state)
 
-      assert %{state | receiver_buffer: @mllp_start_of_block <> "Blah blah"} == new_state
+      assert %{
+               state
+               | receiver_buffer: "Blah blah",
+                 current_message_type: :mllp
+             } == new_state
     end
   end
 end
 
 defmodule ExtendedFramer do
   use MLLP.PacketFramer, frame_types: [{"¿", "?", :spanish_query}]
+
+  def get_message_type(:spanish_query, _), do: :spanish_query
 end
 
-defmodule FunExtendedFramer do
-  use MLLP.PacketFramer, frame_types: [{"<<", ">>", &__MODULE__.message_type/1}]
+# TODO: Add test for this:
 
-  def message_type(:message) do
+defmodule FunExtendedFramer do
+  use MLLP.PacketFramer, frame_types: [{"<<", ">>", :fun_times}]
+
+  def get_message_type(:fun_times, _message) do
     :fun_message_type
   end
 end

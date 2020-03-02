@@ -3,6 +3,7 @@ defmodule MLLP.SenderContract do
           :unspecified_error
           | :reply_timeout_exceeded
           | :not_connected
+          | :closed
           | :tcp_error
 
   @callback send_hl7_and_receive_ack(
@@ -39,7 +40,7 @@ defmodule MLLP.Sender do
   @behaviour SenderContract
 
   defstruct socket: nil,
-            ip_address: {0, 0, 0, 0},
+            address: {127, 0, 0, 1},
             port: 0,
             pending_reconnect: nil,
             pid: nil,
@@ -49,8 +50,31 @@ defmodule MLLP.Sender do
   alias __MODULE__, as: State
 
   ## API
-  def start_link({ip_address, port}, options \\ []) do
-    GenServer.start_link(__MODULE__, [ip_address: ip_address, port: port] ++ options)
+
+  @spec start_link(
+          address ::
+            :inet.ip4_address()
+            | :inet.ip6_address()
+            | String.t(),
+          port :: non_neg_integer(),
+          options :: [keyword()]
+        ) :: {:ok, pid()}
+
+  def start_link(address, port, options \\ []) do
+    checked_address =
+      address
+      |> case do
+        {_, _, _, _} ->
+          address
+
+        {_, _, _, _, _, _, _, _} ->
+          address
+
+        value when is_binary(value) ->
+          value |> String.to_charlist()
+      end
+
+    GenServer.start_link(__MODULE__, [address: checked_address, port: port] ++ options)
   end
 
   @spec is_connected?(pid :: pid()) :: boolean()
@@ -144,13 +168,14 @@ defmodule MLLP.Sender do
   # ===================
 
   def init(options) do
-    ip_address = Keyword.fetch!(options, :ip_address)
+    address = Keyword.fetch!(options, :address)
+
     port = Keyword.fetch!(options, :port)
 
     telemetry_module = Keyword.get(options, :telemetry_module, MLLP.DefaultTelemetry)
 
     state =
-      %State{pid: self(), ip_address: ip_address, port: port, telemetry_module: telemetry_module}
+      %State{pid: self(), address: address, port: port, telemetry_module: telemetry_module}
       |> Map.update!(:tcp, fn old_tcp -> Keyword.get(options, :tcp, old_tcp) end)
       |> attempt_connection()
 
@@ -311,7 +336,7 @@ defmodule MLLP.Sender do
     telemetry(:status, %{status: :connecting}, state)
 
     state.tcp.connect(
-      state.ip_address,
+      state.address,
       state.port,
       [:binary, {:packet, 0}, {:active, false}],
       2000

@@ -11,8 +11,8 @@ defmodule MLLP.Receiver do
 
   def start(
         port,
-        packet_framer_module \\ MLLP.DefaultPacketFramer,
-        dispatcher_module \\ MLLP.DefaultDispatcher
+        dispatcher_module \\ MLLP.DefaultDispatcher,
+        packet_framer_module \\ MLLP.DefaultPacketFramer
       )
       when is_atom(packet_framer_module) and is_atom(dispatcher_module) do
     receiver_id = make_ref()
@@ -73,10 +73,16 @@ defmodule MLLP.Receiver do
 
   def init([receiver_id, transport, options]) do
     {:ok, socket} = :ranch.handshake(receiver_id, [])
+
+    {:ok, server_info} = :inet.sockname(socket)
+    {:ok, client_info} = :inet.peername(socket)
+
     :ok = transport.setopts(socket, active: :once)
 
     state = %{
       socket: socket,
+      server_info: server_info,
+      client_info: client_info,
       transport: transport,
       framing_context: %FramingContext{
         packet_framer_module:

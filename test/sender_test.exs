@@ -35,7 +35,7 @@ defmodule SenderTest do
       |> expect(:send, fn ^socket, ^packet -> :ok end)
       |> expect(:recv, fn ^socket, 0 -> {:ok, tcp_reply} end)
 
-      {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+      {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
       expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: "You win!"}
 
@@ -59,7 +59,7 @@ defmodule SenderTest do
         end
       )
 
-      {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+      {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
       assert_raise(FunctionClauseError, fn ->
         Sender.send_hl7_and_receive_ack(sender, message)
@@ -90,7 +90,7 @@ defmodule SenderTest do
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
 
-      {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+      {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
       assert({:ok, :sent} == Sender.send_hl7(sender, message))
     end
@@ -109,7 +109,7 @@ defmodule SenderTest do
         end
       )
 
-      {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+      {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
       assert_raise(FunctionClauseError, fn ->
         Sender.send_hl7(sender, message)
@@ -154,7 +154,7 @@ defmodule SenderTest do
     |> expect(:send, fn ^socket, ^packet -> :ok end)
     |> expect(:recv, fn ^socket, 0, _ -> {:ok, reply} end)
 
-    {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+    {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
     assert({:ok, reply} == Sender.send_non_hl7_and_receive_reply(sender, message))
   end
@@ -176,7 +176,7 @@ defmodule SenderTest do
     )
     |> expect(:send, fn ^socket, ^packet -> :ok end)
 
-    {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+    {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
     assert({:ok, :sent} == Sender.send_non_hl7(sender, message))
   end
@@ -200,7 +200,7 @@ defmodule SenderTest do
     |> expect(:send, fn ^socket, ^packet -> :ok end)
     |> expect(:recv, fn ^socket, 0, _ -> {:ok, reply} end)
 
-    {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+    {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
     assert({:ok, reply} == Sender.send_non_hl7_and_receive_reply(sender, message))
   end
@@ -223,7 +223,7 @@ defmodule SenderTest do
     |> expect(:send, fn ^socket, ^message -> :ok end)
     |> expect(:recv, fn ^socket, 0, _ -> {:ok, reply} end)
 
-    {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+    {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
     assert({:ok, reply} == Sender.send_raw_and_receive_reply(sender, message))
   end
@@ -244,7 +244,7 @@ defmodule SenderTest do
     )
     |> expect(:send, fn ^socket, ^message -> :ok end)
 
-    {:ok, sender} = Sender.start_link({address, port}, tcp: MLLP.TCPMock)
+    {:ok, sender} = Sender.start_link(address, port, tcp: MLLP.TCPMock)
 
     assert({:ok, :sent} == Sender.send_raw(sender, message))
   end
