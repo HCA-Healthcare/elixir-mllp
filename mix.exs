@@ -7,7 +7,15 @@ defmodule MLLP.MixProject do
       version: String.trim(File.read!("./VERSION")),
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      elixirc_paths: elixirc_paths(Mix.env()),
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test
+      ],
+      test_coverage: [tool: ExCoveralls]
     ]
   end
 
@@ -22,11 +30,18 @@ defmodule MLLP.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ranch, "~> 1.6"},
-      {:elixir_hl7, "~> 0.5.0"},
+      {:telemetry, "~> 0.4.1"},
+      {:ranch, "~> 1.7.1"},
+      {:elixir_hl7, "~> 0.6.0"},
       {:dialyxir, "~> 0.5.1", only: [:dev], runtime: false},
       {:mix_test_watch, "~> 0.9.0", only: :dev, runtime: false},
+      {:mox, "~> 0.5", only: :test},
+      {:excoveralls, "~> 0.12.0", only: :test, runtime: false},
       {:private, "~> 0.1.1", runtime: false}
     ]
   end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

@@ -1,4 +1,8 @@
 defmodule MLLP.Dispatcher do
-  @callback dispatch(message :: binary) ::
-              {:ok, :application_accept | :application_reject | :application_error}
+  @callback dispatch(
+              message_type :: atom(),
+              message :: String.t(),
+              state :: MLLP.FramingContext.t()
+            ) ::
+              {:ok, state :: MLLP.FramingContext.t()}
 end
