@@ -5,22 +5,14 @@ defmodule MLLP.PacketFramer do
   defmacro __using__(opts) do
     alias MLLP.FramingContext
 
-    {opt_frame_types, _} =
-      opts
-      |> Keyword.get(:frame_types, [])
-      # It is said that using this function in a macro is bad,
-      # but I can't figure out another way to make it work.
-      |> Code.eval_quoted()
-
     # ^K - VT (Vertical Tab)
     mllp_start_of_block = <<0x0B>>
     mllp_end_of_block = <<0x1C, 0x0D>>
 
     frame_types =
-      opt_frame_types
-      |> Enum.concat([
-        {mllp_start_of_block, mllp_end_of_block, :mllp}
-      ])
+      Keyword.get(opts, :frame_types, [])
+      |> Enum.map(fn {:{}, _, [a1, a2, a3]} -> {a1, a2, a3} end)
+      |> Enum.concat([{mllp_start_of_block, mllp_end_of_block, :mllp}])
 
     quote do
       @behaviour MLLP.PacketFramer
