@@ -39,6 +39,24 @@ defmodule MLLP.Sender do
 
   @behaviour SenderContract
 
+  @type pid_ref :: atom | pid | {atom, any} | {:via, atom, any}
+  @type ip_address ::
+          atom
+          | charlist
+          | {:local, binary | charlist}
+          | {byte, byte, byte, byte}
+          | {char, char, char, char, char, char, char, char}
+
+  @type t :: %MLLP.Sender{
+          socket: any(),
+          address: ip_address(),
+          port: char(),
+          pending_reconnect: reference() | nil,
+          pid: pid() | nil,
+          telemetry_module: module() | nil,
+          tcp: module()
+        }
+
   defstruct socket: nil,
             address: {127, 0, 0, 1},
             port: 0,
@@ -50,7 +68,6 @@ defmodule MLLP.Sender do
   alias __MODULE__, as: State
 
   ## API
-
   @spec start_link(
           address ::
             :inet.ip4_address()
@@ -163,10 +180,18 @@ defmodule MLLP.Sender do
     GenServer.stop(pid)
   end
 
+  @spec send_message(pid_ref(), binary()) :: any()
+  def send_message(pid, message) do
+    wrapped_message = Envelope.wrap_message(message)
+    GenServer.call(pid, {:send, wrapped_message}, 30_000)
+  end
+
+  ## GenServer callbacks
   # ===================
   # GenServer callbacks
   # ===================
 
+  @spec init(Keyword.t()) :: {:ok, MLLP.Sender.t()}
   def init(options) do
     address = Keyword.fetch!(options, :address)
 
