@@ -27,6 +27,8 @@ defmodule MLLP.Ack do
           text_message :: String.t()
         ) :: HL7.Message.t()
 
+  @type dispatcher_result :: {:ok, :application_accept | :application_error | :application_reject}
+
   def get_ack_for_message(message, code, text_message \\ "")
 
   def get_ack_for_message(message, :application_accept, text_message),
