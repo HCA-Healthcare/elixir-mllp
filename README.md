@@ -72,6 +72,7 @@ defmodule DemoDispatcher do
         :application_accept
       )
       |> to_string()
+      |> MLLP.Envelope.wrap_message()
 
     {:ok, %{state | reply_buffer: reply}}
   end
@@ -123,7 +124,8 @@ defmodule ExpandedDemoDispatcher do
     reply =
       MLLP.Ack.get_ack_for_message(message, :application_accept)
       |> to_string()
-
+      |> MLLP.Envelope.wrap_message()
+    
     {:ok, %{state | reply_buffer: reply}}
   end
 

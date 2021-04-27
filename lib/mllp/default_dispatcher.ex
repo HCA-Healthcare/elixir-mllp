@@ -23,6 +23,7 @@ defmodule MLLP.DefaultDispatcher do
         "A real MLLP message dispatcher was not provided"
       )
       |> to_string()
+      |> MLLP.Envelope.wrap_message()
 
     {:ok, %{state | reply_buffer: reply}}
   end
