@@ -5,6 +5,7 @@ defmodule MLLP.Application do
 
   use Application
 
+  @spec start(any, any) :: {:error, any} | {:ok, pid}
   def start(_type, _args) do
     # List all child processes to be supervised
     children = []

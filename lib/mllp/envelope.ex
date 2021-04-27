@@ -84,6 +84,7 @@ defmodule MLLP.Envelope do
   <<11, 104, 105, 28, 13>>
 
   """
+  @spec wrap_message(binary()) :: binary() | no_return
   def wrap_message(<<11, _::binary>> = message) do
     if String.ends_with?(message, @ending) do
       Logger.debug("MLLP Envelope performed unnecessary wrapping of wrapped message")
@@ -105,6 +106,7 @@ defmodule MLLP.Envelope do
   "hi"
 
   """
+  @spec unwrap_message(binary()) :: binary() | no_return
   def unwrap_message(<<11, _::binary>> = wrapped_message) do
     if String.ends_with?(wrapped_message, @ending) do
       unwrap(wrapped_message)
@@ -122,6 +124,7 @@ defmodule MLLP.Envelope do
     end
   end
 
+  @spec unwrap(binary()) :: binary()
   defp unwrap(wrapped) do
     wrapped
     |> String.trim_leading(@sb)

@@ -1,4 +1,10 @@
 defmodule MLLP.Ack do
+  @moduledoc """
+  Handles all Ack message operations including getting ack messages for a given HL7 message,
+  creating the ack for a given message,
+  and handling the return value for different ack codes.
+  """
+
   # # AA – Application Accept
   # # AR - Application Reject
   # # AE – Application Error
@@ -26,6 +32,12 @@ defmodule MLLP.Ack do
           acknowledgement_code :: atom() | String.t(),
           text_message :: String.t()
         ) :: HL7.Message.t()
+
+  @type dispatcher_result :: {:ok, :application_accept | :application_error | :application_reject}
+
+  @doc """
+  Gets the ack message for a given message and its application status
+  """
 
   def get_ack_for_message(message, code, text_message \\ "")
 
@@ -97,6 +109,18 @@ defmodule MLLP.Ack do
 
     HL7.Message.raw([msh, msa]) |> HL7.Message.new()
   end
+
+  @doc """
+  Verifies the ack code in the ack message against the original HL7 message. Possible valid codes and their values include:
+  AA -- Application Accept
+  CA -- Application Accept
+  AR -- Application Reject
+  CR -- Application Reject
+  AE -- Application Error
+  CE -- Application Error
+
+  All other possible codes would be considered bad ack codes and the method returns :error
+  """
 
   @spec verify_ack_against_message(
           message :: String.t() | HL7.Message.t(),

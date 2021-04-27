@@ -5,9 +5,27 @@ defmodule MLLP.Receiver do
 
   alias MLLP.FramingContext
 
+  @type dispatcher :: any()
+
+  @type t :: %MLLP.Receiver{
+          socket: any(),
+          transport: any(),
+          buffer: String.t(),
+          dispatcher_module: dispatcher()
+        }
+
   @behaviour :ranch_protocol
 
-  @spec start(port :: non_neg_integer()) :: {:ok, map()} | {:error, any()}
+  defstruct socket: nil,
+            transport: nil,
+            buffer: "",
+            dispatcher_module: MLLP.DefaultDispatcher
+
+  @spec start(
+          port :: non_neg_integer(),
+          dispatcher_module :: module(),
+          packet_framer_module :: module()
+        ) :: {:ok, map()} | {:error, any()}
 
   def start(
         port,
@@ -41,6 +59,7 @@ defmodule MLLP.Receiver do
     end
   end
 
+  @spec stop(any) :: :ok | {:error, :not_found}
   def stop(port) do
     receiver_id = get_receiver_id_by_port(port)
 
@@ -71,6 +90,11 @@ defmodule MLLP.Receiver do
   # GenServer callbacks
   # ===================
 
+  @spec init(Keyword.t()) ::
+          {:ok, state :: any()}
+          | {:ok, state :: any(), timeout() | :hibernate | {:continue, term()}}
+          | :ignore
+          | {:stop, reason :: any()}
   def init([receiver_id, transport, options]) do
     {:ok, socket} = :ranch.handshake(receiver_id, [])
 
