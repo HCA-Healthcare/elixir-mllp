@@ -30,13 +30,13 @@ defmodule MLLP.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:telemetry, "~> 0.4.1"},
+      {:telemetry, "~> 0.4.3"},
       {:ranch, "~> 1.7.1"},
       {:elixir_hl7, "~> 0.6.0"},
-      {:dialyxir, "~> 0.5.1", only: [:dev], runtime: false},
-      {:mix_test_watch, "~> 0.9.0", only: :dev, runtime: false},
-      {:mox, "~> 0.5", only: :test},
-      {:excoveralls, "~> 0.12.0", only: :test, runtime: false},
+      {:dialyxir, "~> 1.1.0", only: [:dev], runtime: false},
+      {:mix_test_watch, "~> 1.0.2", only: :dev, runtime: false},
+      {:mox, "~> 1.0.0", only: :test},
+      {:excoveralls, "~> 0.14.0", only: :test, runtime: false},
       {:private, "~> 0.1.1", runtime: false}
     ]
   end
