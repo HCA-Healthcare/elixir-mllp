@@ -25,3 +25,7 @@ mllp-*.tar
 # Ignore editor artifacts
 /.elixir_ls
 .idea
+
+# Ignore dialyzer plt and hash files
+/priv/plts/*.plt
+/priv/plts/*.hash
