@@ -16,6 +16,7 @@ defmodule DefaultDispatcherTest do
         "A real MLLP message dispatcher was not provided"
       )
       |> to_string()
+      |> MLLP.Envelope.wrap_message()
 
     expected_state = %{state | reply_buffer: expected_reply}
 
