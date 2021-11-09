@@ -74,7 +74,7 @@ defmodule MLLP.Ack do
       |> List.replace_at(6, sending_facility)
       |> List.replace_at(3, receiving_application)
       |> List.replace_at(5, sending_application)
-      |> List.replace_at(9, "ACK^O01")
+      |> List.replace_at(9, "ACK^#{HL7.Query.get_part(hl7, "MSH-9.2")}")
 
     msa = ["MSA", code, message_control_id, text_message]
 
@@ -173,9 +173,7 @@ defmodule MLLP.Ack do
       end
     else
       {:error, :bad_message_control_id,
-       "The message_control_id of the message #{message_control_id} does not match the message_control_id of the ACK message (#{
-         ack_message_control_id
-       })."}
+       "The message_control_id of the message #{message_control_id} does not match the message_control_id of the ACK message (#{ack_message_control_id})."}
     end
   end
 

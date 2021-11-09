@@ -73,7 +73,7 @@ defmodule AckTest do
     test "returns an ACK message with the proper message_type" do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
       assert "ACK" == hl7_ack.header.message_type
-      assert "O01" == hl7_ack.header.trigger_event
+      assert "A01" == hl7_ack.header.trigger_event
     end
 
     test "return an ACK message with a matching message_control_id" do
