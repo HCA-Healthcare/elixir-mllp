@@ -113,30 +113,6 @@ defmodule MLLP.PacketFramer do
             end
 
             def handle_packet(
-                unquote(mllp_end_of_block),
-                  %FramingContext{current_message_type: unquote(message_type)} = state
-                ) do
-
-              message_type_value = unquote(message_type) 
-              message = state.receiver_buffer
-              message_type_atom = get_message_type(message_type_value, message)
-
-              {:ok, new_state} =
-                state.dispatcher_module.dispatch(
-                  message_type_atom,
-                  message,
-                  %{
-                    state
-                    | # save leftovers to prepend to next packet
-                      receiver_buffer: "",
-                      current_message_type: nil
-                  }
-                )
-
-              {:ok, new_state}
-            end
-
-            def handle_packet(
                   packet,
                   %FramingContext{current_message_type: unquote(message_type)} = state
                 ) do
