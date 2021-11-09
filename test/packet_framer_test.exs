@@ -167,6 +167,31 @@ defmodule MLLP.PacketFramerTest do
 
     end
 
+    test "last two bytes of end mllp block received in two distinct packets" do 
+      message = "hello"
+
+      packet1 = @mllp_start_of_block <> message
+      packet2 = <<0x1C>>
+      packet3 = <<0x0D>>
+
+      state = %FramingContext{dispatcher_module: MLLP.DispatcherMock}
+
+      expect(MLLP.DispatcherMock, :dispatch, fn :mllp_unknown, ^message, state ->
+        {:ok, state}
+      end)
+
+      {:ok, new_state1} = DefaultPacketFramer.handle_packet(packet1, state)
+      {:ok, new_state2} = DefaultPacketFramer.handle_packet(packet2, new_state1)
+      {:ok, new_state3} = DefaultPacketFramer.handle_packet(packet3, new_state2)
+      
+
+      assert %{
+               state
+               | receiver_buffer: "",
+                 current_message_type: nil
+      } == new_state3
+    end
+
     test "last two bytes recieved is the mllp end block" do 
       message1 = "hello"
 
