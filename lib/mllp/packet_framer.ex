@@ -13,8 +13,10 @@ defmodule MLLP.PacketFramer do
       |> Code.eval_quoted()
 
     # ^K - VT (Vertical Tab)
+    file_sep = <<0x1C>>
+    carriage_return = <<0x0D>>
     mllp_start_of_block = <<0x0B>>
-    mllp_end_of_block = <<0x1C, 0x0D>>
+    mllp_end_of_block = file_sep <> carriage_return
 
     frame_types =
       opt_frame_types
@@ -75,6 +77,42 @@ defmodule MLLP.PacketFramer do
             end
 
             def handle_packet(
+                  unquote(carriage_return),
+                  %FramingContext{current_message_type: unquote(message_type)} = state
+                ) do
+
+              message_type_value = unquote(message_type)
+              check = byte_size(state.receiver_buffer) - 1
+
+              case state.receiver_buffer do
+                <<message::binary-size(check), unquote(file_sep)>> ->
+                  message_type_atom = get_message_type(message_type_value, message)
+
+                  {:ok, new_state} =
+                    state.dispatcher_module.dispatch(
+                      message_type_atom,
+                      message,
+                      %{
+                        state
+                        | # save leftovers to prepend to next packet
+                          receiver_buffer: "",
+                          current_message_type: nil
+                      }
+                    )
+
+                  {:ok, new_state}
+
+                _ ->
+                  {:ok,
+                   %{
+                     state
+                     | receiver_buffer: state.receiver_buffer <> unquote(carriage_return),
+                       current_message_type: message_type_value
+                   }}
+              end
+            end
+
+            def handle_packet(
                   packet,
                   %FramingContext{current_message_type: unquote(message_type)} = state
                 ) do
@@ -119,18 +157,17 @@ defmodule MLLP.PacketFramer do
             unexpected_packet,
             state
           ) do
-        mllp_start_of_block = <<0x0B>>
 
         to_chunk = unexpected_packet <> state.receiver_buffer
 
-        case String.split(to_chunk, mllp_start_of_block, parts: 2) do
+        case String.split(to_chunk, unquote(mllp_start_of_block), parts: 2) do
           [unframed] ->
             handle_unframed(unframed)
             {:ok, %{state | receiver_buffer: ""}}
 
           [unframed, next_buffer] ->
             handle_unframed(unframed)
-            handle_packet(mllp_start_of_block <> next_buffer, %{state | receiver_buffer: ""})
+            handle_packet(unquote(mllp_start_of_block) <> next_buffer, %{state | receiver_buffer: ""})
         end
       end
 
