@@ -80,7 +80,6 @@ defmodule MLLP.PacketFramer do
                   unquote(carriage_return),
                   %FramingContext{current_message_type: unquote(message_type)} = state
                 ) do
-
               message_type_value = unquote(message_type)
               check = byte_size(state.receiver_buffer) - 1
 
@@ -157,7 +156,6 @@ defmodule MLLP.PacketFramer do
             unexpected_packet,
             state
           ) do
-
         to_chunk = unexpected_packet <> state.receiver_buffer
 
         case String.split(to_chunk, unquote(mllp_start_of_block), parts: 2) do
@@ -167,7 +165,11 @@ defmodule MLLP.PacketFramer do
 
           [unframed, next_buffer] ->
             handle_unframed(unframed)
-            handle_packet(unquote(mllp_start_of_block) <> next_buffer, %{state | receiver_buffer: ""})
+
+            handle_packet(unquote(mllp_start_of_block) <> next_buffer, %{
+              state
+              | receiver_buffer: ""
+            })
         end
       end
 

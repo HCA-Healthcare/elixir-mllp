@@ -121,7 +121,7 @@ defmodule MLLP.PacketFramerTest do
              } == new_state
     end
 
-    test "last byte recieved is the carriage return of an mllp block" do 
+    test "last byte recieved is the carriage return of an mllp block" do
       message1 = "hello"
 
       packet1 = @mllp_start_of_block <> message1 <> <<0x1C>>
@@ -135,14 +135,12 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state1} = DefaultPacketFramer.handle_packet(packet1, state)
       {:ok, new_state2} = DefaultPacketFramer.handle_packet(packet2, new_state1)
-      
 
       assert %{
                state
                | receiver_buffer: "",
                  current_message_type: nil
-      } == new_state2
-
+             } == new_state2
 
       message2 = "hello" <> <<0x0D>> <> "world"
       packet3 = @mllp_start_of_block <> message1
@@ -163,11 +161,10 @@ defmodule MLLP.PacketFramerTest do
                state
                | receiver_buffer: "",
                  current_message_type: nil
-      } == new_state6
-
+             } == new_state6
     end
 
-    test "last two bytes of end mllp block received in two distinct packets" do 
+    test "last two bytes of end mllp block received in two distinct packets" do
       message = "hello"
 
       packet1 = @mllp_start_of_block <> message
@@ -183,16 +180,15 @@ defmodule MLLP.PacketFramerTest do
       {:ok, new_state1} = DefaultPacketFramer.handle_packet(packet1, state)
       {:ok, new_state2} = DefaultPacketFramer.handle_packet(packet2, new_state1)
       {:ok, new_state3} = DefaultPacketFramer.handle_packet(packet3, new_state2)
-      
 
       assert %{
                state
                | receiver_buffer: "",
                  current_message_type: nil
-      } == new_state3
+             } == new_state3
     end
 
-    test "last two bytes recieved is the mllp end block" do 
+    test "last two bytes recieved is the mllp end block" do
       message1 = "hello"
 
       packet1 = @mllp_start_of_block <> message1
@@ -206,13 +202,12 @@ defmodule MLLP.PacketFramerTest do
 
       {:ok, new_state1} = DefaultPacketFramer.handle_packet(packet1, state)
       {:ok, new_state2} = DefaultPacketFramer.handle_packet(packet2, new_state1)
-      
 
       assert %{
                state
                | receiver_buffer: "",
                  current_message_type: nil
-      } == new_state2
+             } == new_state2
     end
 
     test "simple HL7 message" do
