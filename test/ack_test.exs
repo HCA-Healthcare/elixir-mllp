@@ -74,6 +74,7 @@ defmodule AckTest do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
       assert "ACK" == hl7_ack.header.message_type
       assert "A01" == hl7_ack.header.trigger_event
+      assert "ACK" == HL7.Query.get_part(hl7_ack, "MSH-9.3")
     end
 
     test "return an ACK message with a matching message_control_id" do
