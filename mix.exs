@@ -9,6 +9,7 @@ defmodule MLLP.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      dialyzer: dialyzer_opts(),
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
@@ -33,7 +34,7 @@ defmodule MLLP.MixProject do
       {:telemetry, "~> 0.4.3"},
       {:ranch, "~> 1.7.1"},
       {:elixir_hl7, "~> 0.6.0"},
-      {:dialyxir, "~> 1.1.0", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
       {:mix_test_watch, "~> 1.0.2", only: :dev, runtime: false},
       {:mox, "~> 1.0.0", only: :test},
       {:excoveralls, "~> 0.14.0", only: :test, runtime: false},
@@ -44,4 +45,12 @@ defmodule MLLP.MixProject do
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  defp dialyzer_opts do
+    [
+      remove_defaults: [:unknown],
+      plt_core_path: "priv/plts",
+      plt_file: {:no_warn, "priv/plts/mllp.plt"}
+    ]
+  end
 end
