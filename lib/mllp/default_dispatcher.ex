@@ -11,9 +11,7 @@ defmodule MLLP.DefaultDispatcher do
   @spec dispatch(:mllp_hl7, binary(), MLLP.FramingContext.t()) :: {:ok, MLLP.FramingContext.t()}
   def dispatch(:mllp_hl7, message, state) when is_binary(message) do
     Logger.error(
-      "MLLP.Dispatcher not set. The DefaultDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{
-        message
-      }"
+      "MLLP.Dispatcher not set. The DefaultDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{message}"
     )
 
     reply =
