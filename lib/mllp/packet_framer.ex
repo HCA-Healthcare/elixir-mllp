@@ -13,10 +13,10 @@ defmodule MLLP.PacketFramer do
       |> Code.eval_quoted()
 
     # ^K - VT (Vertical Tab)
-    fs_sep = <<0x1C>>
+    file_sep = <<0x1C>>
     carriage_return = <<0x0D>>
     mllp_start_of_block = <<0x0B>>
-    mllp_end_of_block = fs_sep <> carriage_return
+    mllp_end_of_block = file_sep <> carriage_return
 
     frame_types =
       opt_frame_types
@@ -85,7 +85,7 @@ defmodule MLLP.PacketFramer do
               check = byte_size(state.receiver_buffer) - 1
 
               case state.receiver_buffer do
-                <<message::binary-size(check), unquote(fs_sep)>> ->
+                <<message::binary-size(check), unquote(file_sep)>> ->
                   message_type_atom = get_message_type(message_type_value, message)
 
                   {:ok, new_state} =
