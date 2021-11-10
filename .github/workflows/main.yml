@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - vb/ci-bump-version
+      - ci-bump-version
   pull_request:
     types: [opened, synchronize]
 
@@ -135,7 +135,7 @@ jobs:
         run: mix coveralls
 
   release:
-    needs: [build, format, test]
+    needs: [build, format, test, dialyzer]
     name: Bump version
     runs-on: ubuntu-latest
     steps:
