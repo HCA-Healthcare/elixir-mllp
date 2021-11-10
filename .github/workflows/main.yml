@@ -135,7 +135,7 @@ jobs:
         run: mix coveralls
 
   release:
-    needs: test
+    needs: [build, format, test]
     name: Bump version
     runs-on: ubuntu-latest
     steps:
