@@ -41,8 +41,8 @@ defmodule VersionUtility do
     %{version | patch: version.patch + 1, pre: [], build: nil}
   end
 
-  def bump(%Version{pre: [branch, branch_version]} = version, current_branch) when branch == current_branch do
-    %{version | pre: [branch, branch_version + 1]}
+  def bump(%Version{pre: [branch, _]} = version, current_branch) when branch == current_branch do
+    %{version | patch: version.patch + 1}
   end
 
   def bump(version, branch) do
