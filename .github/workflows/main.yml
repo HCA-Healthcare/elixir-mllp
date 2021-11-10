@@ -44,6 +44,7 @@ jobs:
         run: mix deps.get
       - name: compile
         run: | 
+          git fetch --tags
           git tag --list
           mix compile --warnings-as-errors
 
