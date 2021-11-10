@@ -13,7 +13,7 @@ env:
 
 jobs:
   call_main:
-    uses: main.yml@v1
+    uses: .github/workflows/main.yml@v1
 
   release:
     needs: call_main
