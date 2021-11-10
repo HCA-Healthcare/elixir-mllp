@@ -6,4 +6,4 @@ on:
 
 jobs:
   call_main:
-    uses: .github/workflows/main.yml@v1
+    uses: HCA-Healthcare/elixir-mllp/.github/workflows/main.yml@v1
