@@ -4,7 +4,7 @@ defmodule MLLP.MixProject do
   def project do
     [
       app: :elixir_mllp,
-      version: String.trim(File.read!("./VERSION")),
+      version: get_next_version(),
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -52,5 +52,12 @@ defmodule MLLP.MixProject do
       plt_core_path: "priv/plts",
       plt_file: {:no_warn, "priv/plts/mllp.plt"}
     ]
+  end
+
+  defp get_next_version() do
+    "elixir"
+    |> System.cmd(["bump_version.exs"])
+    |> elem(0)
+    |> String.trim()
   end
 end
