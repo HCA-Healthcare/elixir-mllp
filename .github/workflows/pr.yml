@@ -1,0 +1,9 @@
+---
+name: ci_pr
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  call_main:
+    uses: main.yml@v1

@@ -2,7 +2,7 @@
 
 defmodule Git do
   def latest_tag() do
-    "v" <> last_tag = execute(~w[tag])
+    "v" <> last_tag = execute(~w[describe --tags --abbrev=0])
     |> String.split("\n")
     |> List.last()
 
