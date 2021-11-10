@@ -45,7 +45,6 @@ jobs:
       - name: compile
         run: | 
           git fetch --tags
-          git tag --list
           mix compile --warnings-as-errors
 
   format:
@@ -71,7 +70,9 @@ jobs:
           path: _build
           key: ${{ runner.os }}-build-${{ env.otp-version }}-${{ env.elixir-version }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: format
-        run: mix format --check-formatted
+        run: |
+          git fetch --tags
+          mix format --check-formatted
 
   dialyzer:
     needs: build
@@ -105,7 +106,9 @@ jobs:
           path: priv/plts
           key: ${{ runner.os }}-mllp-dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: dialyze
-        run: mix dialyzer
+        run: |
+          git fetch --tags
+          mix dialyzer
 
   test:
     needs: build
@@ -134,7 +137,9 @@ jobs:
           path: _build
           key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: test
-        run: mix coveralls
+        run: |
+          git fetch --tags
+          mix coveralls
 
   release:
     needs: [build, format, test, dialyzer]
