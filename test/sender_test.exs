@@ -17,7 +17,7 @@ defmodule SenderTest do
     test "with valid HL7 returns an AA" do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = :socket
+      socket = make_ref()
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       packet = MLLP.Envelope.wrap_message(raw_hl7)
@@ -48,7 +48,7 @@ defmodule SenderTest do
     test "send_hl7_and_receive_ack given a string" do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = :socket
+      socket = make_ref()
       message = "Sore disappointment"
 
       MLLP.TCPMock
@@ -71,7 +71,7 @@ defmodule SenderTest do
     test "as a message" do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = :socket
+      socket = make_ref()
 
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
 
@@ -98,7 +98,7 @@ defmodule SenderTest do
     test "send_hl7 with a non-hl7 string" do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = :socket
+      socket = make_ref()
       message = "I am not HL7"
 
       MLLP.TCPMock
@@ -139,7 +139,7 @@ defmodule SenderTest do
     address = {127, 0, 0, 1}
     port = 4090
 
-    socket = :socket
+    socket = make_ref()
     message = "Hello, it's me"
     packet = MLLP.Envelope.wrap_message(message)
     reply = "Good reply"
@@ -163,7 +163,7 @@ defmodule SenderTest do
     address = {127, 0, 0, 1}
     port = 4090
 
-    socket = :socket
+    socket = make_ref()
     message = "Hello, it's me"
     packet = MLLP.Envelope.wrap_message(message)
 
@@ -185,7 +185,7 @@ defmodule SenderTest do
     address = {127, 0, 0, 1}
     port = 4090
 
-    socket = :socket
+    socket = make_ref()
     message = "MSH1234"
     packet = MLLP.Envelope.wrap_message(message)
     reply = "Good reply"
@@ -209,7 +209,7 @@ defmodule SenderTest do
     address = {127, 0, 0, 1}
     port = 4090
 
-    socket = :socket
+    socket = make_ref()
     message = "ABCDEFG"
     reply = "Good reply"
 
@@ -232,7 +232,7 @@ defmodule SenderTest do
     address = {127, 0, 0, 1}
     port = 4090
 
-    socket = :socket
+    socket = make_ref()
     message = "ABCDEFG"
 
     MLLP.TCPMock

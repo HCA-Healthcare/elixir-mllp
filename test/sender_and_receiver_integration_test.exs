@@ -64,7 +64,8 @@ defmodule SenderAndReceiverIntegrationTest do
 
       payload = "A simple message"
 
-      assert {:error, :not_connected} == MLLP.Sender.send_raw(sender_pid, payload)
+      assert {:error, %{type: :connect_failure, reason: :no_socket}} ==
+               MLLP.Sender.send_raw(sender_pid, payload)
 
       capture_log(fn -> MLLP.Sender.stop(sender_pid) end)
       assert Process.alive?(sender_pid) == false
@@ -80,7 +81,7 @@ defmodule SenderAndReceiverIntegrationTest do
       MLLP.Receiver.stop(port)
       assert Process.alive?(receiver_pid) == false
 
-      assert {:error, :closed} ==
+      assert {:error, %{type: :recv_failure, reason: :closed}} ==
                MLLP.Sender.send_raw_and_receive_reply(sender_pid, "Simple message")
     end
 
@@ -114,6 +115,36 @@ defmodule SenderAndReceiverIntegrationTest do
     end
   end
 
+  describe "timeout behaviour" do
+    test "does not open additional sockets on reconnect" do
+      port = 8153
+
+      {:ok, %{pid: _receiver_pid}} =
+        MLLP.Receiver.start(
+          port,
+          SenderAndReceiverIntegrationTest.TestDispatcher
+        )
+
+      {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
+
+      message =
+        (HL7.Examples.wikipedia_sample_hl7() <>
+           "ZNK|JUNK|" <> String.pad_leading("\r", 100, "Z"))
+        |> HL7.Message.new()
+        |> to_string()
+
+      capture_log(fn ->
+        {:error, _} = MLLP.Sender.send_raw_and_receive_reply(sender_pid, message, 10)
+      end)
+
+      # Wait for reconnect timer
+      Process.sleep(1500)
+      assert Process.alive?(sender_pid)
+
+      assert Enum.count(open_ports_for_pid(sender_pid)) == 1
+    end
+  end
+
   defmodule TestDispatcher do
     require Logger
 
@@ -129,5 +160,12 @@ defmodule SenderAndReceiverIntegrationTest do
 
       {:ok, %{state | reply_buffer: reply}}
     end
+  end
+
+  defp open_ports_for_pid(pid) do
+    Enum.filter(Port.list(), fn p ->
+      info = Port.info(p)
+      Keyword.get(info, :name) == 'tcp_inet' and Keyword.get(info, :connected) == pid
+    end)
   end
 end
