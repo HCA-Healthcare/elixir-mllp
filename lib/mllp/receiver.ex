@@ -1,4 +1,22 @@
 defmodule MLLP.Receiver do
+  @moduledoc """
+  A simple MLLP server. 
+  Minimal Lower Layer Protocol (MLLP) is an application level protocol which merely defines header and 
+  trailer delimiters for HL7 messages utilized in the healthcare industry for data interchange. 
+  ## Options 
+  The following options are required for starting an MLLP receiver either via `start/1` or indirectly via 
+  `child_spec/1` : 
+    - `:port` - The tcp port the receiver will listen on. 
+    - `:dispatcher` - Callback module messages ingested by the receiver will be passed to. This library ships with an 
+    echo only example dispatch module, `MLLP.DefaultDispatcher` for example purposes, which can be provided as a value 
+    for this parameter. 
+  Optional parameters: 
+    - `:packet_framer` - Callback module for received packets. Defaults to `MLLP.DefaultPacketFramer`  
+    - `:transport_opts` - A map of parameters given to ranch as transport options. See 
+    [Ranch Documentation](https://ninenines.eu/docs/en/ranch/1.7/manual/) for all transport options that can be 
+    provided. The default `transport_opts` are `%{num_acceptors: 100, max_connections: 20_000}` if none are provided. 
+  """
+
   use GenServer
 
   require Logger
@@ -7,52 +25,56 @@ defmodule MLLP.Receiver do
 
   @type dispatcher :: any()
 
-  @type t :: %MLLP.Receiver{
+  @type t() :: %MLLP.Receiver{
           socket: any(),
           transport: any(),
           buffer: String.t(),
           dispatcher_module: dispatcher()
         }
 
+  @type options() :: [
+          port: pos_integer(),
+          dispatcher: module(),
+          packet_framer: module(),
+          transport_opts: :ranch.opts()
+        ]
+
   @behaviour :ranch_protocol
 
   defstruct socket: nil,
             transport: nil,
             buffer: "",
-            dispatcher_module: MLLP.DefaultDispatcher
+            dispatcher_module: nil
 
-  @spec start(
-          port :: non_neg_integer(),
-          dispatcher_module :: module(),
-          packet_framer_module :: module()
-        ) :: {:ok, map()} | {:error, any()}
+  @doc """
+  Starts an MLLP.Receiver. 
+      {:ok, info_map} = MLLP.Receiver.start(port: 4090, dispatcher: MLLP.Default.Dispatcher)
+  If successful it will return a map containing the pid of the listener, the port it's listening on, and the 
+  receiver_id (ref) created, otherwise an error tuple.
+  Note that this function is in constrast with `child_spec/1` which can be used to embed MLLP.Receiver in your 
+  application or within a supervision tree as part of your application.
+  This function is useful for starting an MLLP.Receiver from within a GenServer or for development and testing 
+  purposes.
+  See [Options](#module-options) for details on required and optiomal parameters.
+  """
 
-  def start(
-        port,
-        dispatcher_module \\ MLLP.DefaultDispatcher,
-        packet_framer_module \\ MLLP.DefaultPacketFramer
-      )
-      when is_atom(packet_framer_module) and is_atom(dispatcher_module) do
-    receiver_id = make_ref()
+  @spec start(options()) :: {:ok, map()} | {:error, any()}
 
-    transport_module = :ranch_tcp
-    transport_options = [port: port]
-    protocol_module = __MODULE__
-
-    options = [packet_framer_module: packet_framer_module, dispatcher_module: dispatcher_module]
+  def start(opts \\ []) do
+    args = to_args(opts)
 
     result =
       :ranch.start_listener(
-        receiver_id,
-        transport_module,
-        transport_options,
-        protocol_module,
-        options
+        args.receiver_id,
+        args.transport_mod,
+        args.transport_opts,
+        args.proto_mod,
+        args.proto_opts
       )
 
     case result do
       {:ok, pid} ->
-        {:ok, %{receiver_id: receiver_id, pid: pid, port: port}}
+        {:ok, %{receiver_id: args.receiver_id, pid: pid, port: args.port}}
 
       {:error, :eaddrinuse} ->
         {:error, :eaddrinuse}
@@ -62,8 +84,69 @@ defmodule MLLP.Receiver do
   @spec stop(any) :: :ok | {:error, :not_found}
   def stop(port) do
     receiver_id = get_receiver_id_by_port(port)
-
     :ok = :ranch.stop_listener(receiver_id)
+  end
+
+  @doc """
+  A function which can be used to embed an MLLP.Receiver under Elixir v1.5+ supervisors.
+  Unlike `start/1`, `start/2`, or `start/3` this function takes two additional options : `ref` and `transport_opts`.
+  Note that if a `ref` option is not supplied a reference will be created for you using `make_ref/0`.
+      children = [{MLLP.Receiver, [
+          ref: MyRef,
+          port: 4090,
+          dispatcher: MLLP.DefaultDispatcher,
+          packet_framer: MLLP.DefaultPacketFramer,
+          transport_opts: %{num_acceptors: 25, max_connections: 20_000}
+        ]}
+      ]
+      Supervisor.init(children, strategy: :one_for_one)
+  See [Options](#module-options) for details on required and optiomal parameters.
+  ## Examples
+      iex(1)> opts = [ref: MyRef, port: 4090, dispatcher: MLLP.DefaultDispatcher, packet_framer: MLLP.DefaultPacketFramer]
+      [
+        ref: MyRef,
+        port: 4090,
+        dispatcher: MLLP.DefaultDispatcher,
+        packet_framer: MLLP.DefaultPacketFramer
+      ]
+      iex(2)> MLLP.Receiver.child_spec(opts)
+      %{
+        id: {:ranch_listener_sup, MyRef},
+        modules: [:ranch_listener_sup],
+        restart: :permanent,
+        shutdown: :infinity,
+        start: {:ranch_listener_sup, :start_link,
+         [
+          MyRef,
+          :ranch_tcp,
+          %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
+          MLLP.Receiver,
+          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.DefaultDispatcher]
+        ]},
+        type: :supervisor
+      }
+  """
+  @spec child_spec(options()) :: Supervisor.child_spec()
+  def child_spec(opts) do
+    args = to_args(opts)
+
+    {id, start, restart, shutdown, type, modules} =
+      :ranch.child_spec(
+        args.receiver_id,
+        args.transport_mod,
+        args.transport_opts,
+        args.proto_mod,
+        args.proto_opts
+      )
+
+    %{
+      id: id,
+      start: start,
+      restart: restart,
+      shutdown: shutdown,
+      type: type,
+      modules: modules
+    }
   end
 
   @doc false
@@ -79,6 +162,58 @@ defmodule MLLP.Receiver do
      ])}
   end
 
+  defp to_args(opts) do
+    port =
+      Keyword.get(opts, :port, nil) ||
+        raise(ArgumentError, "No tcp port provided")
+
+    dispatcher_mod =
+      Keyword.get(opts, :dispatcher, nil) ||
+        raise(ArgumentError, "No dispatcher module provided")
+
+    Code.ensure_loaded?(dispatcher_mod) ||
+      raise "The dispatcher module #{dispatcher_mod} could not be found."
+
+    implements_behaviour?(dispatcher_mod, MLLP.Dispatcher) ||
+      raise "The dispatcher module #{dispatcher_mod} does not implement the MLLP.Dispatcher behaviour"
+
+    packet_framer_mod = Keyword.get(opts, :packet_framer, MLLP.DefaultPacketFramer)
+
+    Code.ensure_loaded?(packet_framer_mod) ||
+      raise "The packet framer module #{packet_framer_mod} could not be found."
+
+    implements_behaviour?(packet_framer_mod, MLLP.PacketFramer) ||
+      raise "The packet framer module #{packet_framer_mod} does not implement the MLLP.Dispatcher behaviour"
+
+    receiver_id = Keyword.get(opts, :ref, make_ref())
+    transport_mod = :ranch_tcp
+
+    transport_opts = Keyword.get(opts, :transport_opts, default_transport_opts())
+
+    socket_opts =
+      transport_opts
+      |> Map.get(:socket_opts, [])
+      |> Keyword.put(:port, port)
+
+    transport_opts1 = Map.put(transport_opts, :socket_opts, socket_opts)
+
+    proto_mod = __MODULE__
+    proto_opts = [packet_framer_module: packet_framer_mod, dispatcher_module: dispatcher_mod]
+
+    %{
+      receiver_id: receiver_id,
+      port: port,
+      transport_mod: transport_mod,
+      transport_opts: transport_opts1,
+      proto_mod: proto_mod,
+      proto_opts: proto_opts
+    }
+  end
+
+  defp default_transport_opts() do
+    %{num_acceptors: 100, max_connections: 20_000}
+  end
+
   defp get_receiver_id_by_port(port) do
     :ranch.info()
     |> Enum.filter(fn {_k, v} -> v[:port] == port end)
@@ -90,6 +225,7 @@ defmodule MLLP.Receiver do
   # GenServer callbacks
   # ===================
 
+  @doc false
   @spec init(Keyword.t()) ::
           {:ok, state :: any()}
           | {:ok, state :: any(), timeout() | :hibernate | {:continue, term()}}
@@ -160,5 +296,10 @@ defmodule MLLP.Receiver do
   def handle_info(msg, state) do
     Logger.warn("Unexpected handle_info for msg [#{inspect(msg)}].")
     {:noreply, state}
+  end
+
+  defp implements_behaviour?(mod, behaviour) do
+    behaviours_found = Keyword.get(mod.__info__(:attributes), :behaviour, [])
+    behaviour in behaviours_found
   end
 end
