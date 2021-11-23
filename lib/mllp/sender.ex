@@ -1,10 +1,8 @@
 defmodule MLLP.SenderContract do
-  @type sender_error ::
-          :unspecified_error
-          | :reply_timeout_exceeded
-          | :not_connected
-          | :closed
-          | :tcp_error
+  @type error_type :: :connect_failure | :send_error | :recv_error
+  @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
+
+  @type sender_error :: %{type: error_type(), reason: error_reason()}
 
   @callback send_hl7_and_receive_ack(
               pid :: pid,
@@ -219,11 +217,11 @@ defmodule MLLP.Sender do
   def handle_call(_, _from, %State{socket: nil} = state) do
     telemetry(
       :status,
-      %{status: :disconnected, error: :nil_socket, context: "MLLP.Sender disconnected failure"},
+      %{status: :disconnected, error: :no_socket, context: "MLLP.Sender disconnected failure"},
       state
     )
 
-    {:reply, {:error, :not_connected}, state}
+    {:reply, {:error, %{type: :connect_failure, reason: :no_socket}}, state}
   end
 
   def handle_call({:send, message, options}, _from, state) do
@@ -236,29 +234,23 @@ defmodule MLLP.Sender do
         message
       end
 
-    state.tcp.send(state.socket, payload)
-    |> case do
+    case state.tcp.send(state.socket, payload) do
       :ok ->
-        reply =
-          if Keyword.get(options, :expect_reply) do
-            receive_reply(state, Keyword.get(options, :reply_timout))
-          else
-            {:ok, :sent}
-          end
+        if Keyword.get(options, :expect_reply) do
+          case receive_reply(state, Keyword.get(options, :reply_timout)) do
+            {:ok, _} = reply ->
+              telemetry(:received, %{response: reply}, state)
+              {:reply, reply, state}
 
-        telemetry(:received, %{response: reply}, state)
-        {:reply, reply, state}
+            {:error, reason} ->
+              handle_recv_error(state, reason)
+          end
+        else
+          {:reply, {:ok, :sent}, state}
+        end
 
       {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: reason, context: "send message failure"},
-          state
-        )
-
-        new_state = maintain_reconnect_timer(state)
-        reply = {:error, :send_message_failure}
-        {:reply, reply, new_state}
+        handle_send_error(state, reason)
     end
   end
 
@@ -267,24 +259,19 @@ defmodule MLLP.Sender do
 
     payload = message |> MLLP.Envelope.wrap_message()
 
-    state.tcp.send(state.socket, payload)
-    |> case do
+    case state.tcp.send(state.socket, payload) do
       :ok ->
-        reply = receive_hl7_ack_for_message(state, payload)
+        case receive_hl7_ack_for_message(state, payload) do
+          {:ok, reply} ->
+            telemetry(:received, %{response: reply}, state)
+            {:reply, reply, state}
 
-        telemetry(:received, %{response: reply}, state)
-        {:reply, reply, state}
+          {:error, reason} ->
+            handle_recv_error(state, reason)
+        end
 
       {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: reason, context: "send message failure"},
-          state
-        )
-
-        new_state = maintain_reconnect_timer(state)
-        reply = {:error, :send_message_failure}
-        {:reply, reply, new_state}
+        handle_send_error(state, reason)
     end
   end
 
@@ -293,8 +280,7 @@ defmodule MLLP.Sender do
 
     payload = message |> MLLP.Envelope.wrap_message()
 
-    state.tcp.send(state.socket, payload)
-    |> case do
+    case state.tcp.send(state.socket, payload) do
       :ok ->
         reply = {:ok, :sent}
 
@@ -302,37 +288,24 @@ defmodule MLLP.Sender do
         {:reply, reply, state}
 
       {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: reason, context: "send message failure"},
-          state
-        )
-
-        new_state = maintain_reconnect_timer(state)
-        reply = {:error, :send_message_failure}
-        {:reply, reply, new_state}
+        handle_send_error(state, reason)
     end
   end
 
-  def handle_info({:tcp_closed, _socket}, state) do
-    telemetry(:status, %{status: :disconnected, error: :tcp_closed}, state)
-    {:noreply, maintain_reconnect_timer(state)}
-  end
-
-  def handle_info({:tcp_error, _, reason}, state) do
-    telemetry(:status, %{status: :disconnected, error: :tcp_error, context: reason}, state)
-    {:stop, reason, state}
-  end
-
-  def handle_info(:timeout, state) do
+  def handle_call(_, _from, %State{socket: nil} = state) do
     telemetry(
       :status,
-      %{status: :disconnected, error: :timeout, context: "timeout message"},
+      %{status: :disconnected, error: :no_socket, context: "MLLP.Sender disconnected failure"},
       state
     )
 
+    {:reply, {:error, %{type: :connect_failure, reason: :no_socket}}, state}
+  end
+
+  def handle_info(:timeout, state) do
     new_state =
-      %State{state | pending_reconnect: nil}
+      state
+      |> stop_connection(:timeout, "timeout message")
       |> attempt_connection()
 
     {:noreply, new_state}
@@ -341,6 +314,30 @@ defmodule MLLP.Sender do
   def terminate(reason, state) do
     Logger.error("Sender socket terminated. Reason: #{inspect(reason)} State: %{inspect state}")
     stop_connection(state, reason, "process terminated")
+  end
+
+  defp handle_send_error(state, error) do
+    telemetry(
+      :status,
+      %{status: :disconnected, error: error, context: "send message failure"},
+      state
+    )
+
+    new_state = maintain_reconnect_timer(state)
+    reply = {:error, %{type: :send_failure, reason: error}}
+    {:reply, reply, new_state}
+  end
+
+  defp handle_recv_error(state, error) do
+    telemetry(
+      :status,
+      %{status: :disconnected, error: error, context: "receive ACK failure"},
+      state
+    )
+
+    new_state = maintain_reconnect_timer(state)
+    reply = {:error, %{type: :recv_failure, reason: error}}
+    {:reply, reply, new_state}
   end
 
   defp stop_connection(%State{} = state, error, context) do
@@ -354,7 +351,14 @@ defmodule MLLP.Sender do
       state.tcp.close(state.socket)
     end
 
-    if state.pending_reconnect, do: Process.cancel_timer(state.pending_reconnect)
+    ensure_pending_reconnect_cancelled(state)
+  end
+
+  defp ensure_pending_reconnect_cancelled(%{pending_reconnect: nil} = state), do: state
+
+  defp ensure_pending_reconnect_cancelled(state) do
+    Process.cancel_timer(state.pending_reconnect)
+    %{state | pending_reconnect: nil}
   end
 
   defp attempt_connection(%State{} = state) do
@@ -397,17 +401,11 @@ defmodule MLLP.Sender do
         ack = raw_ack |> Envelope.unwrap_message()
         unwrapped_message = message |> Envelope.unwrap_message()
 
-        Ack.verify_ack_against_message(unwrapped_message, ack)
+        reply = Ack.verify_ack_against_message(unwrapped_message, ack)
+        {:ok, reply}
 
-      {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: reason, context: "receive ACK failure"},
-          state
-        )
-
-        maintain_reconnect_timer(state)
-        {:error, reason}
+      {:error, _} = err ->
+        err
     end
   end
 
@@ -416,15 +414,8 @@ defmodule MLLP.Sender do
       {:ok, raw_reply} ->
         {:ok, raw_reply}
 
-      {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: reason, context: "receive ACK failure"},
-          state
-        )
-
-        maintain_reconnect_timer(state)
-        {:error, reason}
+      {:error, _} = err ->
+        err
     end
   end
 
