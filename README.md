@@ -1,4 +1,4 @@
-# elixir-mllp
+# mllp
 
 An Elixir library for transporting HL7 messages via MLLP (Minimal Lower Layer Protocol)
 
@@ -12,7 +12,7 @@ This project is not at v1.0 yet. The API and internals will likely change quite 
 
 First, let's start an MLLP.Receiver on port 4090.
 ```
-{:ok, r4090} = MLLP.Receiver.start(4090)
+{:ok, r4090} = MLLP.Receiver.start(port: 4090, dispatcher: MLLP.EchoDispatcher)
 ```
 
 Next, start an MLLP.Sender process and store its PID.
@@ -22,7 +22,7 @@ Next, start an MLLP.Sender process and store its PID.
 
 Alternatively, you could start a Sender using a DNS name rather than an IP address.
 ```
-{:ok, s1} = MLLP.Sender.start_link("localhost", 4090)
+{:ok, s1} = MLLP.Sender.start_link("localhost", port: 4090, MLLP.EchoDispatcher)
 ```
 
 
@@ -36,7 +36,7 @@ You will see log info like...
 
 15:56:07.217 [debug] Receiver received data: [<<11, 77, 83, 72, 124, 94, 126, 92, 38, 124, 77, 101, 103, 97, 82, 101, 103, 124, 88, 89, 90, 72, 111, 115, 112, 67, 124, 83, 117, 112, 101, 114, 79, 69, 124, 88, 89, 90, 73, 109, 103, 67, 116, 114, 124, 50, 48, 48, 54, 48, ...>>].
  
-15:56:07.217 [error] MLLP.Dispatcher not set. The DefaultDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: MSH|^~\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500||ADT^A01^ADT_A01|01052901|P|DG1|1||786.50^CHEST PAIN, UNSPECIFIED^I9|||A|||FFMD^0010^UAMC^L||67890^GRAINGER^LUCY^X^^^MD^0010^UAMC^L|MED|||||A0||13579^POTTER^SHERMAN^T^^^MD^0010^UAMC^L|||||||||||||||||||||||||||2006052909000^^O|||||||0105I30001^^^99DEF^AN
+15:56:07.217 [info] MLLP.Dispatcher not set. The EchoDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: MSH|^~\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500||ADT^A01^ADT_A01|01052901|P|DG1|1||786.50^CHEST PAIN, UNSPECIFIED^I9|||A|||FFMD^0010^UAMC^L||67890^GRAINGER^LUCY^X^^^MD^0010^UAMC^L|MED|||||A0||13579^POTTER^SHERMAN^T^^^MD^0010^UAMC^L|||||||||||||||||||||||||||2006052909000^^O|||||||0105I30001^^^99DEF^AN
  
 15:56:07.218 [debug] MLLP Envelope performed unnecessary unwrapping of unwrapped message
 {:error, :application_reject,
@@ -55,7 +55,11 @@ Now, we will stop the Receiver.
  MLLP.Receiver.stop(4090)
 ```
 
-### Custom message dispatcher
+### Writing a message dispatcher
+
+MLLP does not ship with a default message dispatcher as the cases can vary signficantly from domain to domain. Instead,
+MLLP provides you with helper libraries (e.g., [HL7](https://hex.pm/packages/elixir_hl7) and helper functions so you can
+easily craft your own message dispatcher to suit your needs.
 
 Now we will set up a receiver with a custom dispatcher. 
 
@@ -82,7 +86,7 @@ end
 Now we can configure a Receiver to use our newly defined DemoDispatcher.
 
 ```
-{:ok, r4090} = MLLP.Receiver.start(4090, DemoDispatcher)
+{:ok, r4090} = MLLP.Receiver.start(port: 4090, dispatcher: DemoDispatcher)
 ```
 
 Next, let's set up a Sender to exercise our new Receiver.
@@ -108,11 +112,9 @@ Notice the DefaultDispatcher warning is no longer in the Logger output.
 
 ```
 
-
 ### Non-HL7 over MLLP
 
 While the MLLP framing protocol is mostly for HL7, some companies also send and receive non-HL7 data over MLLP. If you find yourself needing to integrate with a system that has made this choice the following will be helpful.
-
 
 ```
 defmodule ExpandedDemoDispatcher do
@@ -144,7 +146,7 @@ Now, to use this expanded custom dispatcher with a Sender and Receiver.
 Let's start by getting a new Receiver.
 
 ```
-iex> {:ok, r4091} = MLLP.Receiver.start(4091, ExpandedDemoDispatcher)
+iex> {:ok, r4091} = MLLP.Receiver.start(port: 4091, dispatcher: ExpandedDemoDispatcher)
 {:ok,
  %{
    pid: #PID<0.367.0>,

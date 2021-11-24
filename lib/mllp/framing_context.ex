@@ -3,7 +3,7 @@ defmodule MLLP.FramingContext do
             reply_buffer: "",
             current_message_type: nil,
             packet_framer_module: MLLP.DefaultPacketFramer,
-            dispatcher_module: MLLP.DefaultDispatcher,
+            dispatcher_module: nil,
             custom_data: %{}
 
   @type t :: %__MODULE__{

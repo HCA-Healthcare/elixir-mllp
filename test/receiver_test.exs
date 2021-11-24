@@ -27,7 +27,7 @@ defmodule ReceiverTest do
 
     test "creates and removes a receiver process" do
       port = 8130
-      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(pid)
 
@@ -37,7 +37,7 @@ defmodule ReceiverTest do
 
     test "opens a port that can be connected to" do
       port = 8131
-      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(pid)
 
@@ -55,9 +55,9 @@ defmodule ReceiverTest do
 
     test "on the same port twice returns error" do
       port = 8132
-      {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
-      assert capture_log(fn -> Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher) end) =~
+      assert capture_log(fn -> Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher) end) =~
                "port: 8132]) for reason :eaddrinuse (address already in use)"
     end
   end
@@ -92,7 +92,7 @@ defmodule ReceiverTest do
   describe "Receiver receiving data" do
     test "frames and dispatches" do
       port = 8134
-      {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       msg = HL7.Examples.wikipedia_sample_hl7() |> MLLP.Envelope.wrap_message()
 
@@ -103,7 +103,7 @@ defmodule ReceiverTest do
 
     test "via process mailbox discards unhandled messages" do
       port = 8135
-      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
       assert Process.alive?(pid)
 
       log =
@@ -118,7 +118,7 @@ defmodule ReceiverTest do
 
     test "opens a port that can be connected to by two senders" do
       port = 8136
-      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+      {:ok, %{pid: pid}} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       log =
         capture_log(fn ->

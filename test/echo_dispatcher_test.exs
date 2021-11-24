@@ -1,9 +1,7 @@
-defmodule DefaultDispatcherTest do
+defmodule EchoDispatcherTest do
   use ExUnit.Case
-  alias MLLP.DefaultDispatcher
-  doctest DefaultDispatcher
-
-  import ExUnit.CaptureLog
+  alias MLLP.EchoDispatcher
+  doctest EchoDispatcher
 
   test "Default dispatcher accepts HL7, logs, and returns application_reject" do
     state = %MLLP.FramingContext{}
@@ -20,11 +18,6 @@ defmodule DefaultDispatcherTest do
 
     expected_state = %{state | reply_buffer: expected_reply}
 
-    log =
-      capture_log(fn ->
-        assert {:ok, expected_state} == DefaultDispatcher.dispatch(:mllp_hl7, message, state)
-      end)
-
-    assert log =~ "The DefaultDispatcher simply logs and discards messages"
+    assert {:ok, expected_state} == EchoDispatcher.dispatch(:mllp_hl7, message, state)
   end
 end
