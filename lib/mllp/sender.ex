@@ -210,8 +210,8 @@ defmodule MLLP.Sender do
   end
 
   def handle_call(:reconnect, _from, state) do
-    stop_connection(state, nil, "reconnect command")
-    {:reply, :ok, state}
+    state1 = stop_connection(state, nil, "reconnect command")
+    {:reply, :ok, state1}
   end
 
   def handle_call(_, _from, %State{socket: nil} = state) do
@@ -357,7 +357,7 @@ defmodule MLLP.Sender do
   defp ensure_pending_reconnect_cancelled(%{pending_reconnect: nil} = state), do: state
 
   defp ensure_pending_reconnect_cancelled(state) do
-    Process.cancel_timer(state.pending_reconnect)
+    :ok = Process.cancel_timer(state.pending_reconnect, async: true)
     %{state | pending_reconnect: nil}
   end
 
@@ -373,7 +373,7 @@ defmodule MLLP.Sender do
     |> case do
       {:ok, socket} ->
         if state.pending_reconnect != nil do
-          Process.cancel_timer(state.pending_reconnect)
+          :ok = Process.cancel_timer(state.pending_reconnect, async: true)
         end
 
         telemetry(:status, %{status: :connected}, state)

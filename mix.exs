@@ -53,7 +53,7 @@ defmodule MLLP.MixProject do
     [
       remove_defaults: [:unknown],
       plt_core_path: "priv/plts",
-      flags: [:unknown],
+      flags: [:race_conditions, :unmatched_returns, :unknown],
       plt_file: {:no_warn, "priv/plts/mllp.plt"}
     ]
   end
