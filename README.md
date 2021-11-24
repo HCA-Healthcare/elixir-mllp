@@ -22,7 +22,7 @@ Next, start an MLLP.Sender process and store its PID.
 
 Alternatively, you could start a Sender using a DNS name rather than an IP address.
 ```
-{:ok, s1} = MLLP.Sender.start_link("localhost", port: 4090, MLLP.EchoDispatcher)
+{:ok, s1} = MLLP.Sender.start_link("localhost", 4090)
 ```
 
 
@@ -47,7 +47,7 @@ You will see log info like...
  }}
 ```
 
-The Logger debug part tells us that the Receiver received the HL7 message. The Logger error part says we haven't set a Dispatcher and the message will not be routed anywhere other than to the console log. Finally, the return value (`{:error,  :application_reject, ...}`) is a NACK. The DefaultDispatcher will not reply with an `:application_accept`.
+The Logger debug part tells us that the Receiver received the HL7 message. The Logger error part says we haven't set a Dispatcher and the message will not be routed anywhere other than to the console log. Finally, the return value (`{:error,  :application_reject, ...}`) is a NACK. The EchoDispatcher will not reply with an `:application_accept`.
 
 Now, we will stop the Receiver.
 
@@ -101,7 +101,7 @@ Now when you send a message to the Receiver's port, the custom DemoDispatcher wi
 MLLP.Sender.send_hl7_and_receive_ack(s2, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
-Notice the DefaultDispatcher warning is no longer in the Logger output.
+Notice the DemoDispatcher warning is no longer in the Logger output.
 
 ```
 15:43:26.605 [debug] MLLP Envelope performed unnecessary unwrapping of unwrapped message

@@ -48,7 +48,7 @@ defmodule MLLP.Receiver do
 
   @doc """
   Starts an MLLP.Receiver. 
-      {:ok, info_map} = MLLP.Receiver.start(port: 4090, dispatcher: MLLP.Default.Dispatcher)
+      {:ok, info_map} = MLLP.Receiver.start(port: 4090, dispatcher: MLLP.EchoDispatcher)
   If successful it will return a map containing the pid of the listener, the port it's listening on, and the 
   receiver_id (ref) created, otherwise an error tuple.
   Note that this function is in constrast with `child_spec/1` which can be used to embed MLLP.Receiver in your 
