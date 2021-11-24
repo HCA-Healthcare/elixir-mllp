@@ -47,7 +47,7 @@ You will see log info like...
  }}
 ```
 
-The Logger debug part tells us that the Receiver received the HL7 message. The Logger error part says we haven't set a Dispatcher and the message will not be routed anywhere other than to the console log. Finally, the return value (`{:error,  :application_reject, ...}`) is a NACK. The EchoDispatcher will not reply with an `:application_accept`.
+The Logger `[debug]` part tells us that the Receiver received the HL7 message. The Logger `[info]` part explains that the EchoDispatcher does not route the message anywhere (just "logs and discards" messages). Finally, the return value (`{:error,  :application_reject, ...}`) is a NACK. The EchoDispatcher will not reply with an `:application_accept`.
 
 Now, we will stop the Receiver.
 
