@@ -11,7 +11,7 @@ defmodule SenderAndReceiverIntegrationTest do
         ref: ReceiverSupervisionTest,
         port: port,
         transport_opts: transport_opts,
-        dispatcher: MLLP.DefaultDispatcher
+        dispatcher: MLLP.EchoDispatcher
       ]
 
       pid = start_supervised!({MLLP.Receiver, opts})
@@ -42,7 +42,7 @@ defmodule SenderAndReceiverIntegrationTest do
         ref: ReceiverSupervisionTest,
         port: port,
         transport_opts: transport_opts,
-        dispatcher: MLLP.DefaultDispatcher
+        dispatcher: MLLP.EchoDispatcher
       ]
 
       expected_spec = %{
@@ -63,7 +63,7 @@ defmodule SenderAndReceiverIntegrationTest do
              MLLP.Receiver,
              [
                packet_framer_module: MLLP.DefaultPacketFramer,
-               dispatcher_module: MLLP.DefaultDispatcher
+               dispatcher_module: MLLP.EchoDispatcher
              ]
            ]},
         type: :supervisor
@@ -78,7 +78,7 @@ defmodule SenderAndReceiverIntegrationTest do
       port = 8143
 
       {:ok, %{pid: receiver_pid}} =
-        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
@@ -115,7 +115,7 @@ defmodule SenderAndReceiverIntegrationTest do
       assert MLLP.Sender.is_connected?(sender_pid) == false
 
       {:ok, %{pid: receiver_pid}} =
-        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
@@ -150,7 +150,7 @@ defmodule SenderAndReceiverIntegrationTest do
       port = 8151
 
       {:ok, %{pid: receiver_pid}} =
-        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
 

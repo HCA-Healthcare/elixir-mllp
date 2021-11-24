@@ -1,7 +1,8 @@
-defmodule MLLP.DefaultDispatcher do
+defmodule MLLP.EchoDispatcher do
   @moduledoc """
-  Default dispatcher informs user that a dispatch function was not set and returns an application_accept
-  or application_reject depending on if the message is valid (String) or not.
+  Echo dispatcher informs the user that a dispatch function was not set and returns an application_accept
+  or application_reject depending on if the message is valid (String) or not. Useful for debugging and serves
+  as an example for writing your own dispatcher. 
   """
 
   require Logger
@@ -10,8 +11,8 @@ defmodule MLLP.DefaultDispatcher do
 
   @spec dispatch(:mllp_hl7, binary(), MLLP.FramingContext.t()) :: {:ok, MLLP.FramingContext.t()}
   def dispatch(:mllp_hl7, message, state) when is_binary(message) do
-    Logger.error(
-      "MLLP.Dispatcher not set. The DefaultDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{message}"
+    Logger.info(
+      "The EchoDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{message}"
     )
 
     reply =
