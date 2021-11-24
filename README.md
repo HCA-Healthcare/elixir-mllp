@@ -57,7 +57,7 @@ Now, we will stop the Receiver.
 
 ### Writing a message dispatcher
 
-MLLP does not ship with a default message dispatcher as the cases can vary signficantly from domain to domain. Instead,
+MLLP does not ship with a default message dispatcher as the cases can vary significantly from domain to domain. Instead,
 MLLP provides you with helper libraries (e.g., [HL7](https://hex.pm/packages/elixir_hl7) and helper functions so you can
 easily craft your own message dispatcher to suit your needs.
 
