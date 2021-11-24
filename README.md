@@ -36,7 +36,7 @@ You will see log info like...
 
 15:56:07.217 [debug] Receiver received data: [<<11, 77, 83, 72, 124, 94, 126, 92, 38, 124, 77, 101, 103, 97, 82, 101, 103, 124, 88, 89, 90, 72, 111, 115, 112, 67, 124, 83, 117, 112, 101, 114, 79, 69, 124, 88, 89, 90, 73, 109, 103, 67, 116, 114, 124, 50, 48, 48, 54, 48, ...>>].
  
-15:56:07.217 [info] MLLP.Dispatcher not set. The EchoDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: MSH|^~\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500||ADT^A01^ADT_A01|01052901|P|DG1|1||786.50^CHEST PAIN, UNSPECIFIED^I9|||A|||FFMD^0010^UAMC^L||67890^GRAINGER^LUCY^X^^^MD^0010^UAMC^L|MED|||||A0||13579^POTTER^SHERMAN^T^^^MD^0010^UAMC^L|||||||||||||||||||||||||||2006052909000^^O|||||||0105I30001^^^99DEF^AN
+15:56:07.217 [info] The EchoDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: MSH|^~\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500||ADT^A01^ADT_A01|01052901|P|DG1|1||786.50^CHEST PAIN, UNSPECIFIED^I9|||A|||FFMD^0010^UAMC^L||67890^GRAINGER^LUCY^X^^^MD^0010^UAMC^L|MED|||||A0||13579^POTTER^SHERMAN^T^^^MD^0010^UAMC^L|||||||||||||||||||||||||||2006052909000^^O|||||||0105I30001^^^99DEF^AN
  
 15:56:07.218 [debug] MLLP Envelope performed unnecessary unwrapping of unwrapped message
 {:error, :application_reject,
