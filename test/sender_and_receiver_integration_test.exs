@@ -2,11 +2,84 @@ defmodule SenderAndReceiverIntegrationTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
 
+  describe "Supervsion" do
+    test "successfully starts up under a supervisor using a child spec" do
+      port = 8999
+      transport_opts = %{num_acceptors: 1, max_connections: 1, socket_opts: [delay_send: true]}
+
+      opts = [
+        ref: ReceiverSupervisionTest,
+        port: port,
+        transport_opts: transport_opts,
+        dispatcher: MLLP.DefaultDispatcher
+      ]
+
+      pid = start_supervised!({MLLP.Receiver, opts})
+      sup_children = Supervisor.which_children(pid)
+
+      assert [
+               {:ranch_acceptors_sup, _acceptor_pid, :supervisor, [:ranch_acceptors_sup]},
+               {:ranch_conns_sup, conns_pid, :supervisor, [:ranch_conns_sup]}
+             ] = sup_children
+
+      {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
+
+      message = MLLP.Envelope.wrap_message(HL7.Examples.wikipedia_sample_hl7())
+
+      capture_log(fn ->
+        assert {:ok, _msg} = MLLP.Sender.send_raw_and_receive_reply(sender_pid, message)
+      end)
+
+      assert [{MLLP.Receiver, _pid, :worker, [MLLP.Receiver]}] =
+               Supervisor.which_children(conns_pid)
+    end
+
+    test "child_spec/1 accepts and returns documented options" do
+      port = 8999
+      transport_opts = %{num_acceptors: 1, max_connections: 1, socket_opts: [delay_send: true]}
+
+      opts = [
+        ref: ReceiverSupervisionTest,
+        port: port,
+        transport_opts: transport_opts,
+        dispatcher: MLLP.DefaultDispatcher
+      ]
+
+      expected_spec = %{
+        id: {:ranch_listener_sup, ReceiverSupervisionTest},
+        modules: [:ranch_listener_sup],
+        restart: :permanent,
+        shutdown: :infinity,
+        start:
+          {:ranch_listener_sup, :start_link,
+           [
+             ReceiverSupervisionTest,
+             :ranch_tcp,
+             %{
+               max_connections: 1,
+               num_acceptors: 1,
+               socket_opts: [port: 8999, delay_send: true]
+             },
+             MLLP.Receiver,
+             [
+               packet_framer_module: MLLP.DefaultPacketFramer,
+               dispatcher_module: MLLP.DefaultDispatcher
+             ]
+           ]},
+        type: :supervisor
+      }
+
+      assert MLLP.Receiver.child_spec(opts) == expected_spec
+    end
+  end
+
   describe "Starting and stopping" do
     test "with a listener listening" do
       port = 8143
 
-      {:ok, %{pid: receiver_pid}} = MLLP.Receiver.start(port)
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+
       assert Process.alive?(receiver_pid)
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
@@ -22,7 +95,7 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     test "without a listener" do
-      port = 8143
+      port = 8144
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(sender_pid)
@@ -41,7 +114,9 @@ defmodule SenderAndReceiverIntegrationTest do
 
       assert MLLP.Sender.is_connected?(sender_pid) == false
 
-      {:ok, %{pid: receiver_pid}} = MLLP.Receiver.start(port)
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
+
       assert Process.alive?(receiver_pid)
 
       MLLP.Sender.reconnect(sender_pid)
@@ -74,7 +149,8 @@ defmodule SenderAndReceiverIntegrationTest do
     test "with a receiver that stops before the send" do
       port = 8151
 
-      {:ok, %{pid: receiver_pid}} = MLLP.Receiver.start(port)
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.DefaultDispatcher)
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
 
@@ -90,8 +166,8 @@ defmodule SenderAndReceiverIntegrationTest do
 
       {:ok, %{pid: _receiver_pid}} =
         MLLP.Receiver.start(
-          port,
-          SenderAndReceiverIntegrationTest.TestDispatcher
+          port: port,
+          dispatcher: SenderAndReceiverIntegrationTest.TestDispatcher
         )
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
@@ -121,8 +197,8 @@ defmodule SenderAndReceiverIntegrationTest do
 
       {:ok, %{pid: _receiver_pid}} =
         MLLP.Receiver.start(
-          port,
-          SenderAndReceiverIntegrationTest.TestDispatcher
+          port: port,
+          dispatcher: SenderAndReceiverIntegrationTest.TestDispatcher
         )
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
