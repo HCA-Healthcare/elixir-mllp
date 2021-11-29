@@ -179,7 +179,7 @@ Emitted measurements contain status, errors, timestamps, etc.
 The emitted metadata contains the Sender state.
 
 ## Using TLS
-We support TLS for MLLP protocol to secure the data transfer between sender and receiver. Follow steps below to start receiver and sender using TLS
+Support for TLS can be added for MLLP protocol to secure the data transfer between sender and receiver. Follow steps below to start receiver and sender using TLS
 #### Create certificates
 First step in TLS configuraiton is to create a TLS certificates, which can be used by server to start the listener. To help you with creating self signed certificate, run following script:
 
