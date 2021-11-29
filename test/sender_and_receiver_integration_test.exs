@@ -235,7 +235,17 @@ defmodule SenderAndReceiverIntegrationTest do
         cacertfile: "tls/root-ca/ca_certificate.pem"
       ]
 
-      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options, port: port]
+      ack = {
+        :error,
+        :application_reject,
+        %MLLP.Ack{
+          acknowledgement_code: "AR",
+          hl7_ack_message: nil,
+          text_message: "A real MLLP message dispatcher was not provided"
+        }
+      }
+
+      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options, port: port, ack: ack]
     end
 
     @tag :tls
@@ -244,11 +254,11 @@ defmodule SenderAndReceiverIntegrationTest do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
 
-      {:error, :application_reject, _} =
-        MLLP.Sender.send_hl7_and_receive_ack(
-          sender_pid,
-          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-        )
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
     end
 
     @tag :tls
@@ -266,21 +276,15 @@ defmodule SenderAndReceiverIntegrationTest do
 
     @tag :tls
     @tag port: 8156
-    test "can send to tls receiver without certificate with warning", ctx do
-      log =
-        capture_log(fn ->
-          {:ok, sender_pid} =
-            MLLP.Sender.start_link("localhost", ctx.port, tls: [verify: :verify_none])
+    test "can send to tls receiver without certificate with verify none option", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: [verify: :verify_none])
 
-          {:error, :application_reject, _} =
-            MLLP.Sender.send_hl7_and_receive_ack(
-              sender_pid,
-              HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-            )
-        end)
-
-      assert log =~
-               "Description: 'Authenticity is not established by certificate path validation'"
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
     end
   end
 
