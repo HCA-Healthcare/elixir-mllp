@@ -178,6 +178,32 @@ The default emits `[:mllp, :sender, :status | :sending | :received]` telemetry e
 Emitted measurements contain status, errors, timestamps, etc.
 The emitted metadata contains the Sender state.
 
+## Using TLS
+We support TLS for MLLP protocol to secure the data transfer between sender and receiver. Follow steps below to start receiver and sender using TLS
+#### Create certificates
+First step in TLS configuraiton is to create a TLS certificates, which can be used by server to start the listener. To help you with creating self signed certificate, run following script:
+
+`sh tls/tls.sh`
+
+This script create following certs:
+- root ca
+- server certificate signed by root ca
+- client certificate signed by root ca
+### Start Receiver
+
+```
+iex>MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
+```
+
+### Start Sender
+```
+iex>{:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem"])
+```
+
+### Send a message
+```
+iex>MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+```
 
 ## License
 

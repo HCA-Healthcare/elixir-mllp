@@ -29,3 +29,8 @@ mllp-*.tar
 # Ignore dialyzer plt and hash files
 /priv/plts/*.plt
 /priv/plts/*.hash
+
+/tls/client
+/tls/root-ca
+/tls/server
+

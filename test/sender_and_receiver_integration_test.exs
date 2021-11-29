@@ -1,6 +1,7 @@
 defmodule SenderAndReceiverIntegrationTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
+  @moduletag capture_log: true
 
   describe "Supervsion" do
     test "successfully starts up under a supervisor using a child spec" do
@@ -14,13 +15,7 @@ defmodule SenderAndReceiverIntegrationTest do
         dispatcher: MLLP.EchoDispatcher
       ]
 
-      pid = start_supervised!({MLLP.Receiver, opts})
-      sup_children = Supervisor.which_children(pid)
-
-      assert [
-               {:ranch_acceptors_sup, _acceptor_pid, :supervisor, [:ranch_acceptors_sup]},
-               {:ranch_conns_sup, conns_pid, :supervisor, [:ranch_conns_sup]}
-             ] = sup_children
+      start_supervised!({MLLP.Receiver, opts})
 
       {:ok, sender_pid} = MLLP.Sender.start_link({127, 0, 0, 1}, port)
 
@@ -29,9 +24,6 @@ defmodule SenderAndReceiverIntegrationTest do
       capture_log(fn ->
         assert {:ok, _msg} = MLLP.Sender.send_raw_and_receive_reply(sender_pid, message)
       end)
-
-      assert [{MLLP.Receiver, _pid, :worker, [MLLP.Receiver]}] =
-               Supervisor.which_children(conns_pid)
     end
 
     test "child_spec/1 accepts and returns documented options" do
@@ -46,12 +38,9 @@ defmodule SenderAndReceiverIntegrationTest do
       ]
 
       expected_spec = %{
-        id: {:ranch_listener_sup, ReceiverSupervisionTest},
-        modules: [:ranch_listener_sup],
-        restart: :permanent,
-        shutdown: :infinity,
+        id: {:ranch_embedded_sup, ReceiverSupervisionTest},
         start:
-          {:ranch_listener_sup, :start_link,
+          {:ranch_embedded_sup, :start_link,
            [
              ReceiverSupervisionTest,
              :ranch_tcp,
@@ -218,6 +207,80 @@ defmodule SenderAndReceiverIntegrationTest do
       assert Process.alive?(sender_pid)
 
       assert Enum.count(open_ports_for_pid(sender_pid)) == 1
+    end
+  end
+
+  describe "tls support" do
+    setup ctx do
+      port = ctx[:port]
+
+      transport_opts = %{
+        tls: [
+          cacertfile: "tls/root-ca/ca_certificate.pem",
+          verify: :verify_peer,
+          certfile: "tls/server/server_certificate.pem",
+          keyfile: "tls/server/private_key.pem"
+        ]
+      }
+
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(
+          port: port,
+          dispatcher: MLLP.EchoDispatcher,
+          transport_opts: transport_opts
+        )
+
+      sender_tls_options = [
+        verify: :verify_peer,
+        cacertfile: "tls/root-ca/ca_certificate.pem"
+      ]
+
+      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options, port: port]
+    end
+
+    @tag :tls
+    @tag port: 8154
+    test "can send to tls receiver", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+      {:error, :application_reject, _} =
+        MLLP.Sender.send_hl7_and_receive_ack(
+          sender_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+    end
+
+    @tag :tls
+    @tag port: 8155
+    test "fails to connect to tls receiver with host name verification failure", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.sender_tls_options)
+
+      assert {:error, %{reason: :no_socket, type: :connect_failure}} ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag :tls
+    @tag port: 8156
+    test "can send to tls receiver without certificate with warning", ctx do
+      log =
+        capture_log(fn ->
+          {:ok, sender_pid} =
+            MLLP.Sender.start_link("localhost", ctx.port, tls: [verify: :verify_none])
+
+          {:error, :application_reject, _} =
+            MLLP.Sender.send_hl7_and_receive_ack(
+              sender_pid,
+              HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+            )
+        end)
+
+      assert log =~
+               "Description: 'Authenticity is not established by certificate path validation'"
     end
   end
 

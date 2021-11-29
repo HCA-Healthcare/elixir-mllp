@@ -33,7 +33,7 @@ defmodule MLLP.Sender do
   use GenServer
   require Logger
 
-  alias MLLP.{Envelope, Ack, SenderContract, TCP}
+  alias MLLP.{Envelope, Ack, SenderContract, TCP, TLS}
 
   @behaviour SenderContract
 
@@ -52,7 +52,8 @@ defmodule MLLP.Sender do
           pending_reconnect: reference() | nil,
           pid: pid() | nil,
           telemetry_module: module() | nil,
-          tcp: module()
+          tcp: module() | nil,
+          tls_options: Keyword.t()
         }
 
   defstruct socket: nil,
@@ -61,7 +62,8 @@ defmodule MLLP.Sender do
             pending_reconnect: nil,
             pid: nil,
             telemetry_module: nil,
-            tcp: TCP
+            tcp: nil,
+            tls_options: []
 
   alias __MODULE__, as: State
 
@@ -196,9 +198,18 @@ defmodule MLLP.Sender do
     port = Keyword.fetch!(options, :port)
 
     telemetry_module = Keyword.get(options, :telemetry_module, MLLP.DefaultTelemetry)
+    tls_options = Keyword.get(options, :tls, [])
+    socket_module = if tls_options == [], do: TCP, else: TLS
 
     state =
-      %State{pid: self(), address: address, port: port, telemetry_module: telemetry_module}
+      %State{
+        pid: self(),
+        address: address,
+        port: port,
+        telemetry_module: telemetry_module,
+        tcp: socket_module,
+        tls_options: tls_options
+      }
       |> Map.update!(:tcp, fn old_tcp -> Keyword.get(options, :tcp, old_tcp) end)
       |> attempt_connection()
 
@@ -364,10 +375,14 @@ defmodule MLLP.Sender do
   defp attempt_connection(%State{} = state) do
     telemetry(:status, %{status: :connecting}, state)
 
+    options =
+      [:binary, {:packet, 0}, {:active, false}] ++
+        state.tls_options
+
     state.tcp.connect(
       state.address,
       state.port,
-      [:binary, {:packet, 0}, {:active, false}],
+      options,
       2000
     )
     |> case do
