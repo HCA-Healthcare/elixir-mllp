@@ -60,7 +60,7 @@ defmodule MLLP.Receiver do
 
   @spec start(options()) :: {:ok, map()} | {:error, any()}
 
-  def start(opts \\ []) do
+  def start(opts) do
     args = to_args(opts)
 
     result =
