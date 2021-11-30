@@ -174,45 +174,64 @@ defmodule MLLP.Receiver do
 
     receiver_id = Keyword.get(opts, :ref, make_ref())
 
-    transport_opts =
+    {transport_mod, transport_opts} =
       default_transport_opts()
       |> Map.merge(Keyword.get(opts, :transport_opts, %{}))
-
-    tls = Map.has_key?(transport_opts, :tls)
-    transport_mod = if tls, do: :ranch_ssl, else: :ranch_tcp
-
-    {tls_options, transport_opts1} = Map.pop(transport_opts, :tls, [])
-
-    socket_opts =
-      transport_opts1
-      |> Map.get(:socket_opts, [])
-      |> Keyword.put(:port, port)
-      |> Keyword.merge(tls_options)
-
-    transport_opts2 = Map.put(transport_opts1, :socket_opts, socket_opts)
+      |> update_transport_options(port)
 
     proto_mod = __MODULE__
     proto_opts = [packet_framer_module: packet_framer_mod, dispatcher_module: dispatcher_mod]
-
-    if !tls,
-      do:
-        Logger.warn(
-          "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
-        )
 
     %{
       receiver_id: receiver_id,
       port: port,
       transport_mod: transport_mod,
-      transport_opts: transport_opts2,
+      transport_opts: transport_opts,
       proto_mod: proto_mod,
-      proto_opts: proto_opts,
-      tls: tls
+      proto_opts: proto_opts
     }
   end
 
   defp default_transport_opts() do
     %{num_acceptors: 100, max_connections: 20_000}
+  end
+
+  defp update_transport_options(transport_opts, port) do
+    {transport_module, tls_options1, transport_opts1} =
+      case Map.pop(transport_opts, :tls) do
+        {nil, options1} ->
+          Logger.warn(
+            "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
+          )
+
+          {:ranch_tcp, [], options1}
+
+        {tls_options, options1} ->
+          {:ranch_ssl, Keyword.merge(default_tls_options(), tls_options), options1}
+      end
+
+    socket_opts =
+      transport_opts
+      |> get_socket_options(port)
+      |> merge_with_tls_options(tls_options1)
+
+    transport_opts2 = Map.put(transport_opts1, :socket_opts, socket_opts)
+
+    {transport_module, transport_opts2}
+  end
+
+  defp get_socket_options(transport_opts, port) do
+    transport_opts
+    |> Map.get(:socket_opts, [])
+    |> Keyword.put(:port, port)
+  end
+
+  defp merge_with_tls_options(socket_options, tls_options) do
+    socket_options ++ tls_options
+  end
+
+  defp default_tls_options() do
+    [verify: :verify_peer]
   end
 
   defp get_receiver_id_by_port(port) do
