@@ -38,9 +38,9 @@ defmodule SenderAndReceiverIntegrationTest do
       ]
 
       expected_spec = %{
-        id: {:ranch_embedded_sup, ReceiverSupervisionTest},
+        id: {:ranch_listener_sup, ReceiverSupervisionTest},
         start:
-          {:ranch_embedded_sup, :start_link,
+          {:ranch_listener_sup, :start_link,
            [
              ReceiverSupervisionTest,
              :ranch_tcp,
@@ -55,7 +55,10 @@ defmodule SenderAndReceiverIntegrationTest do
                dispatcher_module: MLLP.EchoDispatcher
              ]
            ]},
-        type: :supervisor
+        type: :supervisor,
+        modules: [:ranch_listener_sup],
+        restart: :permanent,
+        shutdown: :infinity
       }
 
       assert MLLP.Receiver.child_spec(opts) == expected_spec

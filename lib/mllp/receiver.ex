@@ -111,8 +111,8 @@ defmodule MLLP.Receiver do
       ]
       iex(2)> MLLP.Receiver.child_spec(opts)
       %{
-        id: {:ranch_embedded_sup, MyRef},
-        start: {:ranch_embedded_sup, :start_link,
+        id: {:ranch_listener_sup, MyRef},
+        start: {:ranch_listener_sup, :start_link,
          [
           MyRef,
           :ranch_tcp,
@@ -120,24 +120,37 @@ defmodule MLLP.Receiver do
           MLLP.Receiver,
           [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher]
         ]},
-        type: :supervisor
+        type: :supervisor,
+        modules: [:ranch_listener_sup],
+        restart: :permanent,
+        shutdown: :infinity
       }
   """
   @spec child_spec(options()) :: Supervisor.child_spec()
   def child_spec(opts) do
     args = to_args(opts)
 
-    :ranch.child_spec(
-      args.receiver_id,
-      args.transport_mod,
-      args.transport_opts,
-      args.proto_mod,
-      args.proto_opts
-    )
+    {id, start, restart, shutdown, type, modules} =
+      :ranch.child_spec(
+        args.receiver_id,
+        args.transport_mod,
+        args.transport_opts,
+        args.proto_mod,
+        args.proto_opts
+      )
+
+    %{
+      id: id,
+      start: start,
+      restart: restart,
+      shutdown: shutdown,
+      type: type,
+      modules: modules
+    }
   end
 
   @doc false
-  def start_link(receiver_id, transport, options) do
+  def start_link(receiver_id, _, transport, options) do
     # the proc_lib spawn is required because of the :gen_server.enter_loop below.
     {:ok,
      :proc_lib.spawn_link(__MODULE__, :init, [
