@@ -3,6 +3,7 @@ defmodule ReceiverTest do
 
   import ExUnit.CaptureLog
   import Mox
+  @moduletag capture_log: true
 
   setup :verify_on_exit!
   setup :set_mox_global
@@ -58,7 +59,7 @@ defmodule ReceiverTest do
       {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert capture_log(fn -> Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher) end) =~
-               "port: 8132]) for reason :eaddrinuse (address already in use)"
+               "port: 8132]}) for reason :eaddrinuse (address already in use)"
     end
   end
 
@@ -143,6 +144,59 @@ defmodule ReceiverTest do
 
       assert Process.alive?(pid)
       :ok = Receiver.stop(port)
+    end
+  end
+
+  describe "tls support" do
+    test "generates a warning on non tls connection" do
+      log =
+        capture_log(fn ->
+          {:ok, _} = Receiver.start(port: 8137, dispatcher: MLLP.EchoDispatcher)
+        end)
+
+      assert log =~
+               "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
+    end
+
+    test "fails to start listener with no cert" do
+      transport_opts = %{
+        tls: [
+          verify: :verify_peer
+        ]
+      }
+
+      assert_raise CaseClauseError, fn ->
+        log =
+          capture_log(fn ->
+            Receiver.start(
+              port: 8137,
+              dispatcher: MLLP.EchoDispatcher,
+              transport_opts: transport_opts
+            )
+          end)
+
+        assert log =~ ":no_cert (no certificate provided"
+      end
+    end
+
+    test "can start a tls listener" do
+      transport_opts = %{
+        tls: [
+          cacertfile: "tls/root-ca/ca_certificate.pem",
+          verify: :verify_peer,
+          certfile: "tls/server/server_certificate.pem",
+          keyfile: "tls/server/private_key.pem"
+        ]
+      }
+
+      {:ok, %{pid: pid}} =
+        Receiver.start(
+          port: 8138,
+          dispatcher: MLLP.EchoDispatcher,
+          transport_opts: transport_opts
+        )
+
+      assert Process.alive?(pid)
     end
   end
 
