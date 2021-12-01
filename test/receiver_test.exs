@@ -59,7 +59,7 @@ defmodule ReceiverTest do
       {:ok, _} = Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert capture_log(fn -> Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher) end) =~
-               "port: 8132]}) for reason :eaddrinuse (address already in use)"
+               "port: 8132]) for reason :eaddrinuse (address already in use)"
     end
   end
 
