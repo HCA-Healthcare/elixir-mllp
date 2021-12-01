@@ -210,10 +210,7 @@ defmodule MLLP.Receiver do
           {:ranch_ssl, Keyword.merge(default_tls_options(), tls_options), options1}
       end
 
-    socket_opts =
-      transport_opts
-      |> get_socket_options(port)
-      |> merge_with_tls_options(tls_options1)
+    socket_opts = get_socket_options(transport_opts, port) ++ tls_options1
 
     transport_opts2 = Map.put(transport_opts1, :socket_opts, socket_opts)
 
@@ -224,10 +221,6 @@ defmodule MLLP.Receiver do
     transport_opts
     |> Map.get(:socket_opts, [])
     |> Keyword.put(:port, port)
-  end
-
-  defp merge_with_tls_options(socket_options, tls_options) do
-    socket_options ++ tls_options
   end
 
   defp default_tls_options() do
