@@ -3,6 +3,24 @@ defmodule SenderAndReceiverIntegrationTest do
   import ExUnit.CaptureLog
   @moduletag capture_log: true
 
+  setup ctx do
+    ack = {
+      :error,
+      :application_reject,
+      %MLLP.Ack{
+        acknowledgement_code: "AR",
+        hl7_ack_message: nil,
+        text_message: "A real MLLP message dispatcher was not provided"
+      }
+    }
+
+    transport_opts = ctx[:transport_opts] || %{}
+    allowed_client_ips = ctx[:allowed_client_ips] || []
+    port = ctx[:port] || 9000
+
+    [ack: ack, port: port, transport_opts: transport_opts, allowed_client_ips: allowed_client_ips]
+  end
+
   describe "Supervsion" do
     test "successfully starts up under a supervisor using a child spec" do
       port = 8999
@@ -52,7 +70,8 @@ defmodule SenderAndReceiverIntegrationTest do
              MLLP.Receiver,
              [
                packet_framer_module: MLLP.DefaultPacketFramer,
-               dispatcher_module: MLLP.EchoDispatcher
+               dispatcher_module: MLLP.EchoDispatcher,
+               allowed_client_ips: []
              ]
            ]},
         type: :supervisor,
@@ -215,8 +234,6 @@ defmodule SenderAndReceiverIntegrationTest do
 
   describe "tls support" do
     setup ctx do
-      port = ctx[:port]
-
       transport_opts = %{
         tls: [
           cacertfile: "tls/root-ca/ca_certificate.pem",
@@ -228,7 +245,7 @@ defmodule SenderAndReceiverIntegrationTest do
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(
-          port: port,
+          port: ctx.port,
           dispatcher: MLLP.EchoDispatcher,
           transport_opts: transport_opts
         )
@@ -238,21 +255,12 @@ defmodule SenderAndReceiverIntegrationTest do
         cacertfile: "tls/root-ca/ca_certificate.pem"
       ]
 
-      ack = {
-        :error,
-        :application_reject,
-        %MLLP.Ack{
-          acknowledgement_code: "AR",
-          hl7_ack_message: nil,
-          text_message: "A real MLLP message dispatcher was not provided"
-        }
-      }
+      on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
 
-      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options, port: port, ack: ack]
+      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options]
     end
 
     @tag :tls
-    @tag port: 8154
     test "can send to tls receiver", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
@@ -265,7 +273,6 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag :tls
-    @tag port: 8155
     test "fails to connect to tls receiver with host name verification failure", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.sender_tls_options)
@@ -278,10 +285,45 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag :tls
-    @tag port: 8156
     test "can send to tls receiver without certificate with verify none option", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: [verify: :verify_none])
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+  end
+
+  describe "ip restriction" do
+    setup ctx do
+      {:ok, %{pid: _receiver_pid}} =
+        MLLP.Receiver.start(
+          port: ctx.port,
+          dispatcher: MLLP.EchoDispatcher,
+          transport_opts: ctx.transport_opts,
+          allowed_client_ips: ctx.allowed_client_ips
+        )
+
+      on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
+    end
+
+    @tag allowed_client_ips: ["127.0.0.0"]
+    test "can restrict client if client IP is not allowed", ctx do
+      {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
+
+      assert {:error, %{reason: :closed, type: :recv_failure}} ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag allowed_client_ips: ["127.0.0.0", "localhost"]
+    test "allow connection from allowed client ips", ctx do
+      {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
 
       assert ctx.ack ==
                MLLP.Sender.send_hl7_and_receive_ack(
