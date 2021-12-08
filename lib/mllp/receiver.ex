@@ -350,14 +350,27 @@ defmodule MLLP.Receiver do
   defp normalize_ip(ip) when is_binary(ip) do
     ip
     |> String.to_charlist()
-    |> :inet.getaddr(:inet)
+    |> :inet.parse_address()
     |> case do
       {:ok, address} ->
         address
 
+      _ ->
+        normalize_hostname(ip)
+    end
+  end
+
+  defp normalize_hostname(name) do
+    name
+    |> String.to_charlist()
+    |> :inet.gethostbyname()
+    |> case do
+      {:ok, {:hostent, _, _, _, _, [address]}} ->
+        address
+
       error ->
         Logger.warn(
-          "IP #{inspect(ip)} provided is not a valid IP #{inspect(error)}, filtering this IP"
+          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_client_ips list"
         )
 
         nil
