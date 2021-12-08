@@ -118,7 +118,7 @@ defmodule MLLP.Receiver do
           :ranch_tcp,
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
-          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_client_ips: []]
+          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: []]
         ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
@@ -192,8 +192,8 @@ defmodule MLLP.Receiver do
       |> Map.merge(Keyword.get(opts, :transport_opts, %{}))
       |> update_transport_options(port)
 
-    allowed_client_ips =
-      Keyword.get(opts, :allowed_client_ips, [])
+    allowed_clients =
+      Keyword.get(opts, :allowed_clients, [])
       |> Enum.map(&normalize_ip/1)
       |> Enum.reject(&is_nil(&1))
 
@@ -202,7 +202,7 @@ defmodule MLLP.Receiver do
     proto_opts = [
       packet_framer_module: packet_framer_mod,
       dispatcher_module: dispatcher_mod,
-      allowed_client_ips: allowed_client_ips
+      allowed_clients: allowed_clients
     ]
 
     %{
@@ -273,7 +273,7 @@ defmodule MLLP.Receiver do
     {:ok, server_info} = transport.sockname(socket)
     {:ok, client_info} = transport.peername(socket)
 
-    if allow_client_ip(client_info, Keyword.get(options, :allowed_client_ips, [])) do
+    if allow_client_ip(client_info, Keyword.get(options, :allowed_clients, [])) do
       :ok = transport.setopts(socket, active: :once)
 
       state = %{
@@ -370,7 +370,7 @@ defmodule MLLP.Receiver do
 
       error ->
         Logger.warn(
-          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_client_ips list"
+          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list"
         )
 
         nil
@@ -379,7 +379,7 @@ defmodule MLLP.Receiver do
 
   defp allow_client_ip({_ip, _port}, []), do: true
 
-  defp allow_client_ip({ip, _port}, allowed_client_ips) do
-    ip in allowed_client_ips
+  defp allow_client_ip({ip, _port}, allowed_clients) do
+    ip in allowed_clients
   end
 end

@@ -15,10 +15,10 @@ defmodule SenderAndReceiverIntegrationTest do
     }
 
     transport_opts = ctx[:transport_opts] || %{}
-    allowed_client_ips = ctx[:allowed_client_ips] || []
+    allowed_clients = ctx[:allowed_clients] || []
     port = ctx[:port] || 9000
 
-    [ack: ack, port: port, transport_opts: transport_opts, allowed_client_ips: allowed_client_ips]
+    [ack: ack, port: port, transport_opts: transport_opts, allowed_clients: allowed_clients]
   end
 
   describe "Supervsion" do
@@ -71,7 +71,7 @@ defmodule SenderAndReceiverIntegrationTest do
              [
                packet_framer_module: MLLP.DefaultPacketFramer,
                dispatcher_module: MLLP.EchoDispatcher,
-               allowed_client_ips: []
+               allowed_clients: []
              ]
            ]},
         type: :supervisor,
@@ -304,13 +304,13 @@ defmodule SenderAndReceiverIntegrationTest do
           port: ctx.port,
           dispatcher: MLLP.EchoDispatcher,
           transport_opts: ctx.transport_opts,
-          allowed_client_ips: ctx.allowed_client_ips
+          allowed_clients: ctx.allowed_clients
         )
 
       on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
     end
 
-    @tag allowed_client_ips: ["127.0.0.0"]
+    @tag allowed_clients: ["127.0.0.0"]
     test "can restrict client if client IP is not allowed", ctx do
       {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
 
@@ -321,7 +321,7 @@ defmodule SenderAndReceiverIntegrationTest do
                )
     end
 
-    @tag allowed_client_ips: ["127.0.0.0", "localhost"]
+    @tag allowed_clients: ["127.0.0.0", "localhost"]
     test "allow connection from allowed client ips", ctx do
       {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
 
