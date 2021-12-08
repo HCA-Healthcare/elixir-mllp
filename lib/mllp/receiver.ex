@@ -118,7 +118,7 @@ defmodule MLLP.Receiver do
           :ranch_tcp,
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
-          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher]
+          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: []]
         ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
@@ -192,8 +192,18 @@ defmodule MLLP.Receiver do
       |> Map.merge(Keyword.get(opts, :transport_opts, %{}))
       |> update_transport_options(port)
 
+    allowed_clients =
+      Keyword.get(opts, :allowed_clients, [])
+      |> Enum.map(&normalize_ip/1)
+      |> Enum.reject(&is_nil(&1))
+
     proto_mod = __MODULE__
-    proto_opts = [packet_framer_module: packet_framer_mod, dispatcher_module: dispatcher_mod]
+
+    proto_opts = [
+      packet_framer_module: packet_framer_mod,
+      dispatcher_module: dispatcher_mod,
+      allowed_clients: allowed_clients
+    ]
 
     %{
       receiver_id: receiver_id,
@@ -263,21 +273,26 @@ defmodule MLLP.Receiver do
     {:ok, server_info} = transport.sockname(socket)
     {:ok, client_info} = transport.peername(socket)
 
-    :ok = transport.setopts(socket, active: :once)
+    if allow_client_ip(client_info, Keyword.get(options, :allowed_clients, [])) do
+      :ok = transport.setopts(socket, active: :once)
 
-    state = %{
-      socket: socket,
-      server_info: server_info,
-      client_info: client_info,
-      transport: transport,
-      framing_context: %FramingContext{
-        packet_framer_module: Keyword.get(options, :packet_framer_module),
-        dispatcher_module: Keyword.get(options, :dispatcher_module)
+      state = %{
+        socket: socket,
+        server_info: server_info,
+        client_info: client_info,
+        transport: transport,
+        framing_context: %FramingContext{
+          packet_framer_module: Keyword.get(options, :packet_framer_module),
+          dispatcher_module: Keyword.get(options, :dispatcher_module)
+        }
       }
-    }
 
-    # http://erlang.org/doc/man/gen_server.html#enter_loop-3
-    :gen_server.enter_loop(__MODULE__, [], state)
+      # http://erlang.org/doc/man/gen_server.html#enter_loop-3
+      :gen_server.enter_loop(__MODULE__, [], state)
+    else
+      Logger.warn("Unexpected client #{inspect(client_info)} is attempting to connect")
+      {:stop, %{message: "Client with IP #{inspect(client_info)} is not allowed to connect."}}
+    end
   end
 
   def handle_info({message, socket, data}, state) when message in [:tcp, :ssl] do
@@ -327,5 +342,45 @@ defmodule MLLP.Receiver do
     else
       framing_context2
     end
+  end
+
+  def normalize_ip({_, _, _, _} = ip), do: ip
+  def normalize_ip({_, _, _, _, _, _, _, _} = ip), do: ip
+  def normalize_ip(ip) when is_atom(ip), do: normalize_ip(to_string(ip))
+
+  def normalize_ip(ip) when is_binary(ip) do
+    ip
+    |> String.to_charlist()
+    |> :inet.parse_address()
+    |> case do
+      {:ok, address} ->
+        address
+
+      _ ->
+        normalize_hostname(ip)
+    end
+  end
+
+  defp normalize_hostname(name) do
+    name
+    |> String.to_charlist()
+    |> :inet.gethostbyname()
+    |> case do
+      {:ok, {:hostent, _, _, _, _, [address | _]}} ->
+        address
+
+      error ->
+        Logger.warn(
+          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list"
+        )
+
+        nil
+    end
+  end
+
+  defp allow_client_ip({_ip, _port}, []), do: true
+
+  defp allow_client_ip({ip, _port}, allowed_clients) do
+    ip in allowed_clients
   end
 end
