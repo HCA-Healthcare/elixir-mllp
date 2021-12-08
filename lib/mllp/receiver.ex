@@ -22,6 +22,7 @@ defmodule MLLP.Receiver do
   require Logger
 
   alias MLLP.FramingContext
+  alias MLLP.Peer
 
   @type dispatcher :: any()
 
@@ -118,7 +119,7 @@ defmodule MLLP.Receiver do
           :ranch_tcp,
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
-          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: []]
+          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: [], verify_peer: false]
         ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
@@ -197,12 +198,15 @@ defmodule MLLP.Receiver do
       |> Enum.map(&normalize_ip/1)
       |> Enum.reject(&is_nil(&1))
 
+    verify_peer = get_in(transport_opts, [:socket_opts, :verify]) == :verify_peer
+
     proto_mod = __MODULE__
 
     proto_opts = [
       packet_framer_module: packet_framer_mod,
       dispatcher_module: dispatcher_mod,
-      allowed_clients: allowed_clients
+      allowed_clients: allowed_clients,
+      verify_peer: verify_peer
     ]
 
     %{
@@ -273,25 +277,29 @@ defmodule MLLP.Receiver do
     {:ok, server_info} = transport.sockname(socket)
     {:ok, client_info} = transport.peername(socket)
 
-    if allow_client_ip(client_info, Keyword.get(options, :allowed_clients, [])) do
-      :ok = transport.setopts(socket, active: :once)
+    case Peer.validate(%{transport: transport, socket: socket, client_info: client_info}, options) do
+      {:ok, :success} ->
+        :ok = transport.setopts(socket, active: :once)
 
-      state = %{
-        socket: socket,
-        server_info: server_info,
-        client_info: client_info,
-        transport: transport,
-        framing_context: %FramingContext{
-          packet_framer_module: Keyword.get(options, :packet_framer_module),
-          dispatcher_module: Keyword.get(options, :dispatcher_module)
+        state = %{
+          socket: socket,
+          server_info: server_info,
+          client_info: client_info,
+          transport: transport,
+          framing_context: %FramingContext{
+            packet_framer_module: Keyword.get(options, :packet_framer_module),
+            dispatcher_module: Keyword.get(options, :dispatcher_module)
+          }
         }
-      }
 
-      # http://erlang.org/doc/man/gen_server.html#enter_loop-3
-      :gen_server.enter_loop(__MODULE__, [], state)
-    else
-      Logger.warn("Unexpected client #{inspect(client_info)} is attempting to connect")
-      {:stop, %{message: "Client with IP #{inspect(client_info)} is not allowed to connect."}}
+        # http://erlang.org/doc/man/gen_server.html#enter_loop-3
+        :gen_server.enter_loop(__MODULE__, [], state)
+
+      {:error, error} ->
+        Logger.warn("Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}")
+
+        {:stop,
+         %{message: "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}"}}
     end
   end
 
@@ -376,11 +384,5 @@ defmodule MLLP.Receiver do
 
         nil
     end
-  end
-
-  defp allow_client_ip({_ip, _port}, []), do: true
-
-  defp allow_client_ip({ip, _port}, allowed_clients) do
-    ip in allowed_clients
   end
 end

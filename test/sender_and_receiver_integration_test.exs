@@ -71,7 +71,8 @@ defmodule SenderAndReceiverIntegrationTest do
              [
                packet_framer_module: MLLP.DefaultPacketFramer,
                dispatcher_module: MLLP.EchoDispatcher,
-               allowed_clients: []
+               allowed_clients: [],
+               verify_peer: false
              ]
            ]},
         type: :supervisor,
@@ -237,7 +238,7 @@ defmodule SenderAndReceiverIntegrationTest do
       transport_opts = %{
         tls: [
           cacertfile: "tls/root-ca/ca_certificate.pem",
-          verify: :verify_peer,
+          verify: :verify_none,
           certfile: "tls/server/server_certificate.pem",
           keyfile: "tls/server/private_key.pem"
         ]
@@ -347,6 +348,71 @@ defmodule SenderAndReceiverIntegrationTest do
                  sender_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
                )
+    end
+  end
+
+  describe "client cert validation" do
+    setup ctx do
+      tls_options = [
+        cacertfile: "tls/root-ca/ca_certificate.pem",
+        certfile: "tls/server/server_certificate.pem",
+        keyfile: "tls/server/private_key.pem"
+      ]
+
+      verify = ctx[:verify] || :verify_none
+
+      transport_opts = %{
+        tls: Keyword.put_new(tls_options, :verify, verify)
+      }
+
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(
+          port: ctx.port,
+          dispatcher: MLLP.EchoDispatcher,
+          transport_opts: transport_opts
+        )
+
+      client_cert = ctx[:client_cert] || ""
+
+      sender_tls_options = [
+        verify: :verify_peer,
+        cacertfile: "tls/root-ca/ca_certificate.pem",
+        certfile: client_cert
+      ]
+
+      on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
+
+      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options]
+    end
+
+    @tag port: 8160
+    test "does not verify client cert if verify none option is provided on receiver", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag port: 8161
+    @tag verify: :verify_peer
+    test "no peer cert", ctx do
+      log =
+        capture_log(fn ->
+          {:ok, sender_pid} =
+            MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+          assert {:error, %{reason: :closed, type: :recv_failure}} ==
+                   MLLP.Sender.send_hl7_and_receive_ack(
+                     sender_pid,
+                     HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+                   )
+        end)
+
+      assert log =~ "error: :no_peercert"
     end
   end
 
