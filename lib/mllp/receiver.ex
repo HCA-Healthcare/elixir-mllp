@@ -344,10 +344,11 @@ defmodule MLLP.Receiver do
     end
   end
 
-  defp normalize_ip({_, _, _, _} = ip), do: ip
-  defp normalize_ip({_, _, _, _, _, _, _, _} = ip), do: ip
+  def normalize_ip({_, _, _, _} = ip), do: ip
+  def normalize_ip({_, _, _, _, _, _, _, _} = ip), do: ip
+  def normalize_ip(ip) when is_atom(ip), do: normalize_ip(to_string(ip))
 
-  defp normalize_ip(ip) when is_binary(ip) do
+  def normalize_ip(ip) when is_binary(ip) do
     ip
     |> String.to_charlist()
     |> :inet.parse_address()

@@ -261,6 +261,7 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag :tls
+    @tag port: 8154
     test "can send to tls receiver", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
@@ -273,6 +274,7 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag :tls
+    @tag port: 8155
     test "fails to connect to tls receiver with host name verification failure", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.sender_tls_options)
@@ -285,6 +287,7 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag :tls
+    @tag port: 8156
     test "can send to tls receiver without certificate with verify none option", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: [verify: :verify_none])
@@ -311,6 +314,7 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag allowed_clients: ["127.0.0.0"]
+    @tag port: 8157
     test "can restrict client if client IP is not allowed", ctx do
       {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
 
@@ -322,7 +326,20 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag allowed_clients: ["127.0.0.0", "localhost"]
-    test "allow connection from allowed client ips", ctx do
+    @tag port: 8158
+    test "allow connection from allowed clients", ctx do
+      {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag allowed_clients: [:localhost]
+    @tag port: 8159
+    test "atom is allowed as client ip or dns", ctx do
       {:ok, sender_pid} = MLLP.Sender.start_link("localhost", ctx.port)
 
       assert ctx.ack ==
