@@ -365,7 +365,7 @@ defmodule MLLP.Receiver do
     |> String.to_charlist()
     |> :inet.gethostbyname()
     |> case do
-      {:ok, {:hostent, _, _, _, _, [address]}} ->
+      {:ok, {:hostent, _, _, _, _, [address | _]}} ->
         address
 
       error ->
