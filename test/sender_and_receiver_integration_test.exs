@@ -353,13 +353,15 @@ defmodule SenderAndReceiverIntegrationTest do
 
   describe "client cert validation" do
     setup ctx do
+      verify = ctx[:verify] || :verify_peer
+      allowed_clients = ctx[:allowed_clients] || []
+
       tls_options = [
         cacertfile: "tls/root-ca/ca_certificate.pem",
         certfile: "tls/server/server_certificate.pem",
-        keyfile: "tls/server/private_key.pem"
+        keyfile: "tls/server/private_key.pem",
+        verify: verify
       ]
-
-      verify = ctx[:verify] || :verify_none
 
       transport_opts = %{
         tls: Keyword.put_new(tls_options, :verify, verify)
@@ -369,15 +371,18 @@ defmodule SenderAndReceiverIntegrationTest do
         MLLP.Receiver.start(
           port: ctx.port,
           dispatcher: MLLP.EchoDispatcher,
-          transport_opts: transport_opts
+          transport_opts: transport_opts,
+          allowed_clients: allowed_clients
         )
 
-      client_cert = ctx[:client_cert] || ""
+      client_cert = ctx[:client_cert] || "tls/client/client_certificate.pem"
+      keyfile = ctx[:keyfile] || "tls/client/private_key.pem"
 
       sender_tls_options = [
         verify: :verify_peer,
         cacertfile: "tls/root-ca/ca_certificate.pem",
-        certfile: client_cert
+        certfile: client_cert,
+        keyfile: keyfile
       ]
 
       on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
@@ -386,6 +391,9 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag port: 8160
+    @tag verify: :verify_none
+    @tag client_cert: ""
+    @tag keyfile: ""
     test "does not verify client cert if verify none option is provided on receiver", ctx do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
@@ -398,21 +406,82 @@ defmodule SenderAndReceiverIntegrationTest do
     end
 
     @tag port: 8161
-    @tag verify: :verify_peer
+    @tag client_cert: ""
+    @tag keyfile: ""
     test "no peer cert", ctx do
       log =
         capture_log(fn ->
           {:ok, sender_pid} =
             MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
 
-          assert {:error, %{reason: :closed, type: :recv_failure}} ==
+          {:error, %{reason: reason, type: _}} =
+            MLLP.Sender.send_hl7_and_receive_ack(
+              sender_pid,
+              HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+            )
+
+          assert :closed == reason
+        end)
+
+      assert log =~ "error: :no_peercert"
+    end
+
+    @tag port: 8162
+    test "accepts a peer cert", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag port: 8163
+    @tag allowed_clients: ["client-1"]
+    test "validate peer cert host name", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
+
+    @tag port: 8163
+    @tag allowed_clients: ["client-x", "client-y"]
+    test "reject peer cert with invalid host name", ctx do
+      log =
+        capture_log(fn ->
+          {:ok, sender_pid} =
+            MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+          assert match?(
+                   {:error, %{reason: :closed, type: _}},
                    MLLP.Sender.send_hl7_and_receive_ack(
                      sender_pid,
                      HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
                    )
+                 )
         end)
 
-      assert log =~ "error: :no_peercert"
+      assert log =~ ":fail_to_verify_client_cert_hostname"
+    end
+
+    @tag port: 8164
+    @tag allowed_clients: ["client-x", "client-1"]
+    test "accept peer cert from multiple allowed clients", ctx do
+      {:ok, sender_pid} =
+        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
+
+      assert ctx.ack ==
+               MLLP.Sender.send_hl7_and_receive_ack(
+                 sender_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
     end
   end
 

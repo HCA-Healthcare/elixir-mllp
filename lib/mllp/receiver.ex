@@ -193,12 +193,9 @@ defmodule MLLP.Receiver do
       |> Map.merge(Keyword.get(opts, :transport_opts, %{}))
       |> update_transport_options(port)
 
-    allowed_clients =
-      Keyword.get(opts, :allowed_clients, [])
-      |> Enum.map(&normalize_ip/1)
-      |> Enum.reject(&is_nil(&1))
-
     verify_peer = get_in(transport_opts, [:socket_opts, :verify]) == :verify_peer
+
+    allowed_clients = get_allowed_clients(verify_peer, opts)
 
     proto_mod = __MODULE__
 
@@ -350,6 +347,17 @@ defmodule MLLP.Receiver do
     else
       framing_context2
     end
+  end
+
+  defp get_allowed_clients(true, opts) do
+    Keyword.get(opts, :allowed_clients, [])
+    |> Enum.map(&to_charlist/1)
+  end
+
+  defp get_allowed_clients(_, opts) do
+    Keyword.get(opts, :allowed_clients, [])
+    |> Enum.map(&normalize_ip/1)
+    |> Enum.reject(&is_nil(&1))
   end
 
   def normalize_ip({_, _, _, _} = ip), do: ip
