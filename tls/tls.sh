@@ -2,7 +2,7 @@ cd tls
 
 mkdir root-ca client server
 cd root-ca
-rm index.txt
+rm -f index.txt
 touch index.txt
 echo 01 > serial
 mkdir certs private
