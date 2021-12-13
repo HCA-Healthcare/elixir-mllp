@@ -1,6 +1,6 @@
 cd tls
 
-mkdir root-ca client server
+mkdir root-ca client server expired_client
 cd root-ca
 rm -f index.txt
 touch index.txt
@@ -36,5 +36,17 @@ cd ../root-ca
 openssl ca -config ../openssl.cnf -in ../client/req.pem -out \
     ../client/client_certificate.pem -notext -batch -extensions client_ca_extensions
 
+#Client Expired Cert
+cd ../expired_client
+
+openssl genrsa -out private_key.pem 2048
+openssl req -new -key private_key.pem -out req.pem -outform PEM \
+    -subj /CN=expired-client-cert/O=client/ -nodes
+
+cd ../root-ca
+openssl ca -config ../openssl.cnf -in ../expired_client/req.pem -out \
+    ../expired_client/client_certificate.pem -startdate 200101000000Z -enddate 201231000000Z -notext -batch -extensions client_ca_extensions
+
 cd ..
 cd ..
+

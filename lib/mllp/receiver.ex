@@ -231,7 +231,9 @@ defmodule MLLP.Receiver do
           {:ranch_tcp, [], options1}
 
         {tls_options, options1} ->
-          {:ranch_ssl, Keyword.merge(default_tls_options(), tls_options), options1}
+          verify_peer = Keyword.get(tls_options, :verify)
+
+          {:ranch_ssl, Keyword.merge(get_peer_options(verify_peer), tls_options), options1}
       end
 
     socket_opts = get_socket_options(transport_opts, port) ++ tls_options1
@@ -247,8 +249,16 @@ defmodule MLLP.Receiver do
     |> Keyword.put(:port, port)
   end
 
-  defp default_tls_options() do
-    [verify: :verify_peer]
+  defp get_peer_options(:verify_peer = verify) do
+    [verify: verify, fail_if_no_peer_cert: true]
+  end
+
+  defp get_peer_options(:verify_none = verify) do
+    [verify: verify, fail_if_no_peer_cert: false]
+  end
+
+  defp get_peer_options(_) do
+    raise ArgumentError, "Invalid verify_peer option provided"
   end
 
   defp get_receiver_id_by_port(port) do

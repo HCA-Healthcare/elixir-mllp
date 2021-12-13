@@ -385,9 +385,17 @@ defmodule SenderAndReceiverIntegrationTest do
         keyfile: keyfile
       ]
 
+      tls_alert = {:tls_alert, ctx[:reason]}
+
+      expected_error_reasons = [:einval, :closed, tls_alert]
+
       on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
 
-      [receiver_pid: receiver_pid, sender_tls_options: sender_tls_options]
+      [
+        receiver_pid: receiver_pid,
+        sender_tls_options: sender_tls_options,
+        expected_error_reasons: expected_error_reasons
+      ]
     end
 
     @tag port: 8160
@@ -395,93 +403,88 @@ defmodule SenderAndReceiverIntegrationTest do
     @tag client_cert: ""
     @tag keyfile: ""
     test "does not verify client cert if verify none option is provided on receiver", ctx do
-      {:ok, sender_pid} =
-        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
-
-      assert ctx.ack ==
-               MLLP.Sender.send_hl7_and_receive_ack(
-                 sender_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      make_call_and_assert_success(ctx, ctx.ack)
     end
 
     @tag port: 8161
     @tag client_cert: ""
     @tag keyfile: ""
+    @tag reason:
+           {:certificate_required,
+            'TLS client: In state connection received SERVER ALERT: Fatal - Certificate required\n'}
     test "no peer cert", ctx do
-      log =
-        capture_log(fn ->
-          {:ok, sender_pid} =
-            MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
-
-          {:error, %{reason: reason, type: _}} =
-            MLLP.Sender.send_hl7_and_receive_ack(
-              sender_pid,
-              HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-            )
-
-          assert :closed == reason
-        end)
-
-      assert log =~ "error: :no_peercert"
+      make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
 
     @tag port: 8162
     test "accepts a peer cert", ctx do
-      {:ok, sender_pid} =
-        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
-
-      assert ctx.ack ==
-               MLLP.Sender.send_hl7_and_receive_ack(
-                 sender_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      make_call_and_assert_success(ctx, ctx.ack)
     end
 
     @tag port: 8163
     @tag allowed_clients: ["client-1"]
-    test "validate peer cert host name", ctx do
-      {:ok, sender_pid} =
-        MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
-
-      assert ctx.ack ==
-               MLLP.Sender.send_hl7_and_receive_ack(
-                 sender_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+    test "accepts peer cert for allowed client", ctx do
+      make_call_and_assert_success(ctx, ctx.ack)
     end
 
     @tag port: 8163
     @tag allowed_clients: ["client-x", "client-y"]
-    test "reject peer cert with invalid host name", ctx do
+    test "reject peer cert for unexpected clients", ctx do
+      expected_error_reasons = [:closed]
+
       log =
         capture_log(fn ->
-          {:ok, sender_pid} =
-            MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
-
-          assert match?(
-                   {:error, %{reason: :closed, type: _}},
-                   MLLP.Sender.send_hl7_and_receive_ack(
-                     sender_pid,
-                     HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-                   )
-                 )
+          make_call_and_assert_failure(ctx, expected_error_reasons)
         end)
 
-      assert log =~ ":fail_to_verify_client_cert_hostname"
+      assert log =~ ":fail_to_verify_client_cert"
+    end
+
+    @tag port: 8163
+    @tag client_cert: "tls/expired_client/client_certificate.pem"
+    @tag keyfile: "tls/expired_client/private_key.pem"
+    @tag reason:
+           {:certificate_expired,
+            'TLS client: In state connection received SERVER ALERT: Fatal - Certificate Expired\n'}
+
+    test "reject expired peer cert", ctx do
+      make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
+    end
+
+    @tag port: 8163
+    @tag client_cert: "tls/server/server_certificate.pem"
+    @tag keyfile: "tls/server/private_key.pem"
+    @tag reason:
+           {:handshake_failure,
+            'TLS client: In state connection received SERVER ALERT: Fatal - Handshake Failure\n'}
+
+    test "reject server cert as peer cert", ctx do
+      make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
 
     @tag port: 8164
     @tag allowed_clients: ["client-x", "client-1"]
     test "accept peer cert from multiple allowed clients", ctx do
+      make_call_and_assert_success(ctx, ctx.ack)
+    end
+
+    defp make_call_and_assert_success(ctx, expected_result) do
+      assert expected_result == start_sender_and_send(ctx)
+    end
+
+    defp make_call_and_assert_failure(ctx, expected_error_reasons) do
+      {:error, %{reason: reason, type: _}} = start_sender_and_send(ctx)
+      assert reason in expected_error_reasons
+    end
+
+    defp start_sender_and_send(ctx) do
       {:ok, sender_pid} =
         MLLP.Sender.start_link("localhost", ctx.port, tls: ctx.sender_tls_options)
 
-      assert ctx.ack ==
-               MLLP.Sender.send_hl7_and_receive_ack(
-                 sender_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      MLLP.Sender.send_hl7_and_receive_ack(
+        sender_pid,
+        HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+      )
     end
   end
 

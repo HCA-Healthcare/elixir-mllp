@@ -33,4 +33,6 @@ mllp-*.tar
 /tls/client
 /tls/root-ca
 /tls/server
+/tls/external
+/tls/expired_client
 
