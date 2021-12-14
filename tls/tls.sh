@@ -2,7 +2,7 @@ cd tls
 
 mkdir root-ca client server expired_client
 cd root-ca
-rm -f index.txt
+rm index.txt
 touch index.txt
 echo 01 > serial
 mkdir certs private

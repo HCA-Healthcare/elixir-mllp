@@ -69,8 +69,12 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp match_fun(references, {:cn, presented}) do
-    presented == references
+  defp match_fun({:cn, reference}, {_, presented}) do
+    presented == reference
+  end
+
+  defp match_fun(reference, {_, presented}) do
+    presented == reference
   end
 
   defp fqdn_fun({:cn, value}) do

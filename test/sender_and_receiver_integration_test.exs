@@ -363,9 +363,7 @@ defmodule SenderAndReceiverIntegrationTest do
         verify: verify
       ]
 
-      transport_opts = %{
-        tls: Keyword.put_new(tls_options, :verify, verify)
-      }
+      transport_opts = %{tls: tls_options}
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(

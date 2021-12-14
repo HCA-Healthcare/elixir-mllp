@@ -196,7 +196,6 @@ defmodule MLLP.Receiver do
     verify_peer = get_in(transport_opts, [:socket_opts, :verify]) == :verify_peer
 
     allowed_clients = get_allowed_clients(verify_peer, opts)
-
     proto_mod = __MODULE__
 
     proto_opts = [
@@ -250,7 +249,12 @@ defmodule MLLP.Receiver do
   end
 
   defp get_peer_options(:verify_peer = verify) do
-    [verify: verify, fail_if_no_peer_cert: true]
+    [
+      verify: verify,
+      fail_if_no_peer_cert: true,
+      crl_check: :best_effort,
+      crl_cache: {:ssl_crl_cache, {:internal, [http: 5_000]}}
+    ]
   end
 
   defp get_peer_options(:verify_none = verify) do
@@ -280,7 +284,6 @@ defmodule MLLP.Receiver do
           | {:stop, reason :: any()}
   def init([receiver_id, transport, options]) do
     {:ok, socket} = :ranch.handshake(receiver_id, [])
-
     {:ok, server_info} = transport.sockname(socket)
     {:ok, client_info} = transport.peername(socket)
 
