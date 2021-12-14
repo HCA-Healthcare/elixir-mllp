@@ -41,8 +41,7 @@ defmodule MLLP.MixProject do
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
       {:mix_test_watch, "~> 1.0.2", only: :dev, runtime: false},
       {:mox, "~> 1.0.0", only: :test},
-      {:excoveralls, "~> 0.14.0", only: :test, runtime: false},
-      {:ok, "~> 1.11"}
+      {:excoveralls, "~> 0.14.0", only: :test, runtime: false}
     ]
   end
 

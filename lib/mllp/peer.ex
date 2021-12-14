@@ -1,57 +1,42 @@
 defmodule MLLP.Peer do
-  use OK.Pipe
   require Logger
 
   @type t :: %{
           :transport => :ranch_tcp | :ranch_ssl,
           :socket => :ranch_transport.socket(),
-          :client_info => {:inet.ip_address(), :inet.port_number()},
-          optional(:cert) => binary() | :undefined | nil
+          :client_info => {:inet.ip_address(), :inet.port_number()}
         }
 
   @type error_type ::
           :client_ip_not_allowed
-          | :no_peercert
           | :fail_to_verify_client_cert
-          | :cert_is_expired
 
   @spec validate(t(), Keyword.t()) :: {:ok, :success} | {:error, error_type()}
 
   def validate(peer, options) do
     allowed_clients = Keyword.get(options, :allowed_clients, [])
     verify_peer = Keyword.get(options, :verify_peer, false)
-
-    if verify_peer do
-      peer
-      |> get_peercert()
-      ~>> verify_host_name(allowed_clients)
-    else
-      validate_client_ip(peer, allowed_clients)
-    end
+    validate(peer, allowed_clients, verify_peer)
   end
 
-  defp get_peercert(%{transport: transport, socket: socket} = peer) do
-    transport.name()
-    |> get_peercert(socket)
-    |> case do
+  defp validate(%{transport: transport, socket: socket}, allowed_clients, true) do
+    case transport.name().peercert(socket) do
       {:ok, cert} ->
-        Map.put_new(peer, :cert, cert)
-        |> OK.wrap()
+        verify_host_name(cert, allowed_clients)
 
       {:error, error} ->
-        Logger.warn("Error in getting peer cert #{inspect(error)}")
-        {:error, :no_peercert}
+        {:error, error}
     end
   end
 
-  defp get_peercert(sslmodule, socket) do
-    sslmodule.peercert(socket)
+  defp validate(%{client_info: client_info}, allowed_clients, false) do
+    validate_client_ip(client_info, allowed_clients)
   end
 
-  defp verify_host_name(_peer, allowed_clients) when allowed_clients in [nil, []],
+  defp verify_host_name(_cert, allowed_clients) when allowed_clients in [nil, []],
     do: {:ok, :success}
 
-  defp verify_host_name(%{cert: cert}, allowed_clients) do
+  defp verify_host_name(cert, allowed_clients) do
     reference_ids =
       for allowed_client <- allowed_clients do
         {:cn, allowed_client}
@@ -81,9 +66,9 @@ defmodule MLLP.Peer do
     value
   end
 
-  defp validate_client_ip(%{client_info: {_ip, _port}}, []), do: {:ok, :success}
+  defp validate_client_ip(_, []), do: {:ok, :success}
 
-  defp validate_client_ip(%{client_info: {ip, _port}}, allowed_clients) do
+  defp validate_client_ip({ip, _port}, allowed_clients) do
     if ip in allowed_clients do
       {:ok, :success}
     else
