@@ -425,7 +425,7 @@ defmodule SenderAndReceiverIntegrationTest do
       make_call_and_assert_success(ctx, ctx.ack)
     end
 
-    @tag port: 8163
+    @tag port: 8164
     @tag allowed_clients: ["client-x", "client-y"]
     test "reject peer cert for unexpected clients", ctx do
       expected_error_reasons = [:closed]
@@ -438,7 +438,7 @@ defmodule SenderAndReceiverIntegrationTest do
       assert log =~ ":fail_to_verify_client_cert"
     end
 
-    @tag port: 8163
+    @tag port: 8165
     @tag client_cert: "tls/expired_client/client_certificate.pem"
     @tag keyfile: "tls/expired_client/private_key.pem"
     @tag reason:
@@ -449,7 +449,7 @@ defmodule SenderAndReceiverIntegrationTest do
       make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
 
-    @tag port: 8163
+    @tag port: 8166
     @tag client_cert: "tls/server/server_certificate.pem"
     @tag keyfile: "tls/server/private_key.pem"
     @tag reason:
@@ -460,7 +460,7 @@ defmodule SenderAndReceiverIntegrationTest do
       make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
 
-    @tag port: 8164
+    @tag port: 8167
     @tag allowed_clients: ["client-x", "client-1"]
     test "accept peer cert from multiple allowed clients", ctx do
       make_call_and_assert_success(ctx, ctx.ack)
