@@ -385,7 +385,7 @@ defmodule SenderAndReceiverIntegrationTest do
 
       tls_alert = {:tls_alert, ctx[:reason]}
 
-      expected_error_reasons = [:einval, :closed, tls_alert]
+      expected_error_reasons = [:einval, :no_socket, :closed, tls_alert]
 
       on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
 
