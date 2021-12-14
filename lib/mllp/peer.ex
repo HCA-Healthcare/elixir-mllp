@@ -16,10 +16,14 @@ defmodule MLLP.Peer do
   def validate(peer, options) do
     allowed_clients = Keyword.get(options, :allowed_clients, [])
     verify_peer = Keyword.get(options, :verify_peer, false)
-    validate(peer, allowed_clients, verify_peer)
+
+    verify(peer, %{allowed_client: allowed_clients, verify_peer: verify_peer})
   end
 
-  defp validate(%{transport: transport, socket: socket}, allowed_clients, true) do
+  defp verify(%{transport: transport, socket: socket}, %{
+         allowed_client: allowed_clients,
+         verify_peer: true
+       }) do
     case transport.name().peercert(socket) do
       {:ok, cert} ->
         verify_host_name(cert, allowed_clients)
@@ -29,8 +33,8 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp validate(%{client_info: client_info}, allowed_clients, false) do
-    validate_client_ip(client_info, allowed_clients)
+  defp verify(%{client_info: client_info}, %{allowed_client: allowed_clients}) do
+    verify_client_ip(client_info, allowed_clients)
   end
 
   defp verify_host_name(_cert, allowed_clients) when allowed_clients in [nil, []],
@@ -66,9 +70,9 @@ defmodule MLLP.Peer do
     value
   end
 
-  defp validate_client_ip(_, []), do: {:ok, :success}
+  defp verify_client_ip(_, []), do: {:ok, :success}
 
-  defp validate_client_ip({ip, _port}, allowed_clients) do
+  defp verify_client_ip({ip, _port}, allowed_clients) do
     if ip in allowed_clients do
       {:ok, :success}
     else
@@ -76,5 +80,5 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp validate_client_ip(_, _), do: {:error, :client_ip_not_allowed}
+  defp verify_client_ip(_, _), do: {:error, :client_ip_not_allowed}
 end
