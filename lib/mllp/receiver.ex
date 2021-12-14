@@ -119,7 +119,7 @@ defmodule MLLP.Receiver do
           :ranch_tcp,
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
-          [packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: [], verify_peer: false]
+          %{packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: %{}, verify: nil}
         ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
@@ -193,17 +193,17 @@ defmodule MLLP.Receiver do
       |> Map.merge(Keyword.get(opts, :transport_opts, %{}))
       |> update_transport_options(port)
 
-    verify_peer = get_in(transport_opts, [:socket_opts, :verify]) == :verify_peer
-
-    allowed_clients = get_allowed_clients(verify_peer, opts)
     proto_mod = __MODULE__
 
-    proto_opts = [
+    verify = get_in(transport_opts, [:socket_opts, :verify])
+    allowed_clients = get_allowed_clients(verify, opts)
+
+    proto_opts = %{
       packet_framer_module: packet_framer_mod,
       dispatcher_module: dispatcher_mod,
       allowed_clients: allowed_clients,
-      verify_peer: verify_peer
-    ]
+      verify: verify
+    }
 
     %{
       receiver_id: receiver_id,
@@ -297,8 +297,8 @@ defmodule MLLP.Receiver do
           client_info: client_info,
           transport: transport,
           framing_context: %FramingContext{
-            packet_framer_module: Keyword.get(options, :packet_framer_module),
-            dispatcher_module: Keyword.get(options, :dispatcher_module)
+            packet_framer_module: Map.get(options, :packet_framer_module),
+            dispatcher_module: Map.get(options, :dispatcher_module)
           }
         }
 
@@ -362,15 +362,17 @@ defmodule MLLP.Receiver do
     end
   end
 
-  defp get_allowed_clients(true, opts) do
+  defp get_allowed_clients(:verify_peer, opts) do
     Keyword.get(opts, :allowed_clients, [])
     |> Enum.map(&to_charlist/1)
+    |> Enum.into(%{}, fn client -> {client, true} end)
   end
 
   defp get_allowed_clients(_, opts) do
     Keyword.get(opts, :allowed_clients, [])
     |> Enum.map(&normalize_ip/1)
     |> Enum.reject(&is_nil(&1))
+    |> Enum.into(%{}, fn client -> {client, true} end)
   end
 
   def normalize_ip({_, _, _, _} = ip), do: ip

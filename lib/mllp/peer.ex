@@ -11,19 +11,15 @@ defmodule MLLP.Peer do
           :client_ip_not_allowed
           | :fail_to_verify_client_cert
 
-  @spec validate(t(), Keyword.t()) :: {:ok, :success} | {:error, error_type()}
+  @spec validate(t(), map()) :: {:ok, :success} | {:error, error_type()}
 
-  def validate(peer, options) do
-    allowed_clients = Keyword.get(options, :allowed_clients, [])
-    verify_peer = Keyword.get(options, :verify_peer, false)
-
-    verify(peer, %{allowed_client: allowed_clients, verify_peer: verify_peer})
+  def validate(_, %{allowed_clients: allowed_clients}) when allowed_clients == %{} do
+    {:ok, :success}
   end
 
-  defp verify(%{transport: transport, socket: socket}, %{
-         allowed_client: allowed_clients,
-         verify_peer: true
-       }) do
+  def validate(peer, %{allowed_clients: allowed_clients, verify: :verify_peer}) do
+    %{transport: transport, socket: socket} = peer
+
     case transport.name().peercert(socket) do
       {:ok, cert} ->
         verify_host_name(cert, allowed_clients)
@@ -33,18 +29,14 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp verify(%{client_info: client_info}, %{allowed_client: allowed_clients}) do
+  def validate(%{client_info: client_info}, %{allowed_clients: allowed_clients}) do
     verify_client_ip(client_info, allowed_clients)
   end
 
-  defp verify_host_name(_cert, allowed_clients) when allowed_clients in [nil, []],
-    do: {:ok, :success}
-
   defp verify_host_name(cert, allowed_clients) do
     reference_ids =
-      for allowed_client <- allowed_clients do
-        {:cn, allowed_client}
-      end
+      Map.keys(allowed_clients)
+      |> Enum.into([], fn allowed_client -> {:cn, allowed_client} end)
 
     if :public_key.pkix_verify_hostname(
          cert,
@@ -58,26 +50,15 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp match_fun({:cn, reference}, {_, presented}) do
-    presented == reference
-  end
+  defp match_fun({:cn, reference}, {_, reference}), do: true
+  defp match_fun(reference, {_, reference}), do: true
+  defp match_fun(_, _), do: false
 
-  defp match_fun(reference, {_, presented}) do
-    presented == reference
-  end
+  defp fqdn_fun({:cn, value}), do: value
 
-  defp fqdn_fun({:cn, value}) do
-    value
-  end
-
-  defp verify_client_ip(_, []), do: {:ok, :success}
-
-  defp verify_client_ip({ip, _port}, allowed_clients) do
-    if ip in allowed_clients do
-      {:ok, :success}
-    else
-      {:error, :client_ip_not_allowed}
-    end
+  defp verify_client_ip({ip, _port}, allowed_clients)
+       when is_map_key(allowed_clients, ip) do
+    {:ok, :success}
   end
 
   defp verify_client_ip(_, _), do: {:error, :client_ip_not_allowed}

@@ -68,12 +68,12 @@ defmodule SenderAndReceiverIntegrationTest do
                socket_opts: [port: 8999, delay_send: true]
              },
              MLLP.Receiver,
-             [
+             %{
                packet_framer_module: MLLP.DefaultPacketFramer,
                dispatcher_module: MLLP.EchoDispatcher,
-               allowed_clients: [],
-               verify_peer: false
-             ]
+               allowed_clients: %{},
+               verify: nil
+             }
            ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
