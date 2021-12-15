@@ -428,7 +428,7 @@ defmodule SenderAndReceiverIntegrationTest do
     @tag port: 8164
     @tag allowed_clients: ["client-x", "client-y"]
     test "reject peer cert for unexpected clients", ctx do
-      expected_error_reasons = [:closed]
+      expected_error_reasons = [:einval, :closed]
 
       log =
         capture_log(fn ->

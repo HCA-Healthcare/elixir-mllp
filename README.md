@@ -207,7 +207,7 @@ iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7(
 ```
 
 ## Using Client Certificates
-MLLP listener can force client to provide a valid certificate before establishing a successful connections. Follow steps below to use client certs with listener
+MLLP listener can enforce client to provide a valid certificate before establishing a successful connection. Follow steps below to use client cert with a listener
 
 ### Start MLLP listener with :verify_peer option
 ```
@@ -228,7 +228,7 @@ iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7(
 MLLP listener supports two options to restrict incoming client connections to make sure it accepts only trusted clients.
 
 1) IP/DNS restriction - In this mode, we can restrict incoming connections using Client IP/DNS.
-2) Client Cert Check - If `verify: :verify_peer` option is enabled on listener, it will enforce client to send a valid client cert and will only allow connection if it trusts the certificate issued to.
+2) Client Cert Check - If `verify: :verify_peer` option is enabled on listener, it will enforce client to send a valid client cert and will only allow the connection if certificate returned from the client is valid and trusted.
 
 Here are couple of exmaples of using client restrictions
 ### Options 1 - Client IP/DNS restrictions
@@ -249,7 +249,7 @@ iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7(
 
 `[warn]  Failed to verify client {ip, port}, error: :client_ip_not_allowed`
 
-***This example provided is without TLS, We can modify it to use with TLS. Make sure to specify `verify: :verify_none` option in transport_opts of listener. See [Using TLS](#using-tls): for details on setting up TLS connections.***
+***This example provided is without TLS, We can modify it to use with TLS. Make sure to specify `verify: :verify_none` option in transport_opts on the listener. See [Using TLS](#using-tls): for details on setting up TLS connections.***
 
 ### Options 2 - Client Cert Check
 #### Start MLLP listener with TLS and allowed_clients options
@@ -265,7 +265,7 @@ iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify
 ```
 iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
-***In such scenarios starting a sender with a valid certificate but if cert issued to is not one of the trusted client by listener, connection will fail and a warning will be logged on the listener***
+***In the above scenarios we start a sender with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
 
 `[warn]  Failed to verify client {ip, port}, error: :fail_to_verify_client_cert`
 
