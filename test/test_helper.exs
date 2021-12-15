@@ -1,2 +1,2 @@
+File.exists?("tls/root-ca") || System.cmd("sh", ["tls/tls.sh"])
 ExUnit.start()
-if not File.exists?("tls/root-ca"), do: System.cmd("sh", ["tls/tls.sh"])

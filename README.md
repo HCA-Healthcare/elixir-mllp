@@ -185,14 +185,15 @@ The first step in TLS configuration is to create a TLS certificates, which can b
 
 `sh tls/tls.sh`
 
-This script create the following certs:
+This script creates the following certs:
 - root ca
 - server certificate signed by root ca
 - client certificate signed by root ca
+- expired client certificate signed by root ca
 ### Start Receiver
 
 ```
-iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
+iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_none, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
 ```
 
 ### Start Sender
@@ -204,6 +205,69 @@ iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify
 ```
 iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
+
+## Using Client Certificates
+MLLP listener can enforce client to provide a valid certificate before establishing a successful connection. Follow steps below to use client cert with a listener
+
+### Start MLLP listener with :verify_peer option
+```
+iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
+```
+
+### Start MLLP Sender with client cert
+```
+iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
+```
+
+### Send a message
+```
+iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+```
+
+## Using Client Restrictions
+MLLP listener supports two options to restrict incoming client connections to make sure it accepts only trusted clients.
+
+1) IP/DNS restriction - In this mode, we can restrict incoming connections using Client IP/DNS.
+2) Client Cert Check - If `verify: :verify_peer` option is enabled on listener, it will enforce client to send a valid client cert and will only allow the connection if certificate returned from the client is valid and trusted.
+
+Here are couple of exmaples of using client restrictions
+### Options 1 - Client IP/DNS restrictions
+#### Start MLLP listener with allowed_clients options
+```
+iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, allowed_clients: ["localhost"])
+```
+### Start MLLP Sender
+```
+iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154)
+```
+### Send a message
+```
+iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+```
+
+***In this example starting a sender on another server other than localhost will fail and a warning will be logged on the server***
+
+`[warn]  Failed to verify client {ip, port}, error: :client_ip_not_allowed`
+
+***This example provided is without TLS, We can modify it to use with TLS. Make sure to specify `verify: :verify_none` option in transport_opts on the listener. See [Using TLS](#using-tls): for details on setting up TLS connections.***
+
+### Options 2 - Client Cert Check
+#### Start MLLP listener with TLS and allowed_clients options
+```
+iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, allowed_clients: ["client-1"], transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
+```
+### Start MLLP Sender
+```
+iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
+```
+
+### Send a message
+```
+iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+```
+***In the above scenarios we start a sender with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
+
+`[warn]  Failed to verify client {ip, port}, error: :fail_to_verify_client_cert`
 
 ## License
 

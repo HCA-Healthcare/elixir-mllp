@@ -131,4 +131,4 @@ jobs:
           path: _build
           key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: test
-        run: mix coveralls
+        run: rm -rf tls/root-ca && mix coveralls

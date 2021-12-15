@@ -37,7 +37,7 @@ distinguished_name = root_ca_distinguished_name
 x509_extensions = root_ca_extensions
 
 [ root_ca_distinguished_name ]
-commonName = waterpark-root-ca
+commonName = elixir-mllp-root-ca
 
 [ root_ca_extensions ]
 basicConstraints = CA:true
