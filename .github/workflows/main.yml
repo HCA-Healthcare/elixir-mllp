@@ -100,9 +100,9 @@ jobs:
         uses: actions/cache@v1
         with:
           path: priv/plts
-          key: ${{ runner.os }}-mllp-dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          key: ${{ runner.os }}-mllp-dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}-${{ hashFiles(format('{0}{1}', github.workspace, '/priv/plts/mllp.plt')) }}
       - name: dialyze
-        run: mix dialyzer
+        run: mix dialyzer --force-check
 
   test:
     needs: build

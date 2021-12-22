@@ -15,20 +15,20 @@ First, let's start an MLLP.Receiver on port 4090.
 {:ok, r4090} = MLLP.Receiver.start(port: 4090, dispatcher: MLLP.EchoDispatcher)
 ```
 
-Next, start an MLLP.Sender process and store its PID.
+Next, start an MLLP.Client process and store its PID.
 ```
-{:ok, s1} = MLLP.Sender.start_link({127,0,0,1}, 4090)
+{:ok, s1} = MLLP.Client.start_link({127,0,0,1}, 4090)
 ```
 
-Alternatively, you could start a Sender using a DNS name rather than an IP address.
+Alternatively, you could start a Client using a DNS name rather than an IP address.
 ```
-{:ok, s1} = MLLP.Sender.start_link("localhost", 4090)
+{:ok, s1} = MLLP.Client.start_link("localhost", 4090)
 ```
 
 
 Now send an HL7 message.
 ```
-MLLP.Sender.send_hl7_and_receive_ack(s1, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+MLLP.Client.send(s1, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
 You will see log info like...
@@ -89,16 +89,16 @@ Now we can configure a Receiver to use our newly defined DemoDispatcher.
 {:ok, r4090} = MLLP.Receiver.start(port: 4090, dispatcher: DemoDispatcher)
 ```
 
-Next, let's set up a Sender to exercise our new Receiver.
+Next, let's set up a Client to exercise our new Receiver.
 
 ```
-{:ok, s2} = MLLP.Sender.start_link({127,0,0,1}, 4090)
+{:ok, s2} = MLLP.Client.start_link({127,0,0,1}, 4090)
 ```
 
 Now when you send a message to the Receiver's port, the custom DemoDispatcher will be used. 
 
 ```
-MLLP.Sender.send_hl7_and_receive_ack(s2, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+MLLP.Client.send(s2, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
 Notice the DemoDispatcher warning is no longer in the Logger output.
@@ -141,7 +141,7 @@ defmodule ExpandedDemoDispatcher do
 end
 ```
 
-Now, to use this expanded custom dispatcher with a Sender and Receiver.
+Now, to use this expanded custom dispatcher with a Client and Receiver.
 
 Let's start by getting a new Receiver.
 
@@ -155,31 +155,31 @@ iex> {:ok, r4091} = MLLP.Receiver.start(port: 4091, dispatcher: ExpandedDemoDisp
  }}
 ```
 
-Next, start a Sender.
+Next, start a Client.
 ```
-iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 4091)
+iex> {:ok, s3} = MLLP.Client.start_link("localhost", 4091)
 {:ok, #PID<0.383.0>}
 
 ```
 
 Now let's send and receive non-HL7 data over MLLP
 ```
-iex> MLLP.Sender.send_non_hl7_and_receive_reply(s3, "Hip hip hurray")
+iex> MLLP.Client.send(s3, "Hip hip hurray")
 15:14:20.531 [debug] Receiver received data: [<<11, 72, 105, 112, 32, 104, 105, 112, 32, 104, 117, 114, 114, 97, 121, 28, 13>>].
 {:ok, "Got the BLOB"}
 ```
 
 
-## **Telemetry** (Sender only currently)
+## **Telemetry** (Client only currently)
 
 Can be namespaced or changed by passing a replacement for DefaultTelemetry.
 
-The default emits `[:mllp, :sender, :status | :sending | :received]` telemetry events.
+The default emits `[:mllp, :client, :status | :sending | :received]` telemetry events.
 Emitted measurements contain status, errors, timestamps, etc.
-The emitted metadata contains the Sender state.
+The emitted metadata contains the Client state.
 
 ## Using TLS
-Support for TLS can be added for MLLP protocol to secure the data transfer between a sender and receiver. Follow steps below to start a receiver and sender using TLS
+Support for TLS can be added for MLLP protocol to secure the data transfer between a client and receiver. Follow steps below to start a receiver and client using TLS
 #### Create certificates
 The first step in TLS configuration is to create a TLS certificates, which can be used by the server to start the listener. To help you with creating self signed certificate, run following script:
 
@@ -196,14 +196,14 @@ This script creates the following certs:
 iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_none, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
 ```
 
-### Start Sender
+### Start Client
 ```
-iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem"])
+iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem"])
 ```
 
 ### Send a message
 ```
-iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
 ## Using Client Certificates
@@ -214,14 +214,14 @@ MLLP listener can enforce client to provide a valid certificate before establish
 iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
 ```
 
-### Start MLLP Sender with client cert
+### Start MLLP Client with client cert
 ```
-iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
+iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
 ```
 
 ### Send a message
 ```
-iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
 ## Using Client Restrictions
@@ -236,16 +236,16 @@ Here are couple of exmaples of using client restrictions
 ```
 iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, allowed_clients: ["localhost"])
 ```
-### Start MLLP Sender
+### Start MLLP Client
 ```
-iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154)
+iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154)
 ```
 ### Send a message
 ```
-iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
-***In this example starting a sender on another server other than localhost will fail and a warning will be logged on the server***
+***In this example starting a client on another server other than localhost will fail and a warning will be logged on the server***
 
 `[warn]  Failed to verify client {ip, port}, error: :client_ip_not_allowed`
 
@@ -256,16 +256,16 @@ iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7(
 ```
 iex> MLLP.Receiver.start(port: 8154, dispatcher: MLLP.EchoDispatcher, allowed_clients: ["client-1"], transport_opts: %{tls: [cacertfile: "tls/root-ca/ca_certificate.pem", verify: :verify_peer, certfile: "tls/server/server_certificate.pem", keyfile: "tls/server/private_key.pem"]})
 ```
-### Start MLLP Sender
+### Start MLLP Client
 ```
-iex> {:ok, s3} = MLLP.Sender.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
+iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "tls/root-ca/ca_certificate.pem", certfile: "tls/client/client_certificate.pem", keyfile: "tls/client/private_key.pem"])
 ```
 
 ### Send a message
 ```
-iex> MLLP.Sender.send_hl7_and_receive_ack(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
+iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
-***In the above scenarios we start a sender with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
+***In the above scenarios we start a client with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
 
 `[warn]  Failed to verify client {ip, port}, error: :fail_to_verify_client_cert`
 
