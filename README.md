@@ -174,12 +174,12 @@ iex> MLLP.Client.send(s3, "Hip hip hurray")
 
 Can be namespaced or changed by passing a replacement for DefaultTelemetry.
 
-The default emits `[:mllp, :sender, :status | :sending | :received]` telemetry events.
+The default emits `[:mllp, :client, :status | :sending | :received]` telemetry events.
 Emitted measurements contain status, errors, timestamps, etc.
 The emitted metadata contains the Client state.
 
 ## Using TLS
-Support for TLS can be added for MLLP protocol to secure the data transfer between a sender and receiver. Follow steps below to start a receiver and sender using TLS
+Support for TLS can be added for MLLP protocol to secure the data transfer between a client and receiver. Follow steps below to start a receiver and client using TLS
 #### Create certificates
 The first step in TLS configuration is to create a TLS certificates, which can be used by the server to start the listener. To help you with creating self signed certificate, run following script:
 
@@ -245,7 +245,7 @@ iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154)
 iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
 
-***In this example starting a sender on another server other than localhost will fail and a warning will be logged on the server***
+***In this example starting a client on another server other than localhost will fail and a warning will be logged on the server***
 
 `[warn]  Failed to verify client {ip, port}, error: :client_ip_not_allowed`
 
@@ -265,7 +265,7 @@ iex> {:ok, s3} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify
 ```
 iex> MLLP.Client.send(s3, HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new())
 ```
-***In the above scenarios we start a sender with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
+***In the above scenarios we start a client with a valid certificate, but the cert issued is not one of the trusted client by the listener, thus the connection fails and a warning is logged by the listener***
 
 `[warn]  Failed to verify client {ip, port}, error: :fail_to_verify_client_cert`
 
