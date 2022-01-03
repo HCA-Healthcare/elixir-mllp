@@ -107,7 +107,7 @@ defmodule ReceiverTest do
       end)
 
       capture_log(fn ->
-        assert tcp_connect_send_receive_and_close(port, msg) =~ "MSA|AR|01052901"
+        assert tcp_connect_send_receive_and_close(port, msg) =~ "MSA|AA|01052901"
       end)
     end
 
