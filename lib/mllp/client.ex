@@ -13,7 +13,7 @@ defmodule MLLP.ClientContract do
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
-          tls_opts: [:ssl.tls_client_option()]
+          tls: [:ssl.tls_client_option()]
         ]
 
   @type send_options :: %{
@@ -176,7 +176,7 @@ defmodule MLLP.Client do
 
   ## Options
 
-  * `:auto_reconnect_interval' - Specify the interval between connection attempts. Specifically, if an attempt
+  * `:auto_reconnect_interval` - Specify the interval between connection attempts. Specifically, if an attempt
      to establish a connection fails, either post-init or at some point during the life span of the client, the value
      of this option shall determine how often to retry a reconnection. Defaults to 1000 milliseconds.
 
@@ -187,14 +187,14 @@ defmodule MLLP.Client do
      Note that `:binary`, `:packet`, and `:active` can not be overriden.
 
   * `:telemetry_module` - A callback module for which MLLP.Client will call `YourTelmetryModule.exectute/3`. The 
-    callback will be passed an event name, meaasurements, and metadata. 
+    callback will be passed an event name, measurements, and metadata. 
     Defaults to `MLLP.DefaultTelemetry`.
 
-  * `:tls_opts` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
-     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. Addtional 
-     hardening may be acheived though other ssl options  such as enabling certificate revocation via the 
-     `:crl_check` and `:crl_cache` options and customization of enabled protocols and cipher suites for your 
-     specific use-case. See [`:ssl`](`:ssl`) for details.
+  * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
+     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. 
+     Addtionally further hardening may be acheived though other ssl options such as enabling 
+     certificate revocation via the `:crl_check` and `:crl_cache` options and customization of 
+     enabled protocols and cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
 
   """
   @spec start_link(
