@@ -5,9 +5,10 @@ defmodule MLLP.ClientContract do
   @type client_error :: MLLP.Client.Error.t()
 
   @type options :: [
+          auto_reconnect_interval: non_neg_integer(),
           reply_timeout: non_neg_integer() | :infinity,
-          tls_opts: map(),
-          socket_opts: map()
+          socket_opts: [:gen_tcp.option()],
+          tls_opts: [:ssl.tls_client_option()]
         ]
 
   @type send_options :: %{
@@ -34,6 +35,54 @@ defmodule MLLP.ClientContract do
 end
 
 defmodule MLLP.Client do
+  @moduledoc """
+  MLLP.Client provides a simple tcp client for sending and receiving data i
+  via [MLLP](https://www.hl7.org/documentcenter/public/wg/inm/mllp_transport_specification.PDF) over TCP.
+
+  While MLLP is primarily used to send [HL7](https://en.wikipedia.org/wiki/Health_Level_7) messages, 
+  MLLP.Client can be used to send non-hl7 messages (e.g, XML, ..). 
+
+  ## Connection Behaviour 
+
+  Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address 
+  on the provided port. If a connection can not be immediately established the client will keep 
+  trying to establish a connecton per the value of `:auto_reconnect_interval` which defaults to 
+  1 second. Therefor it is possible that before a connection is fully established the caller
+  may attempt to send a message which will result in `MLLP.Client.Error.t()` being returned containing
+  the last error encountered in trying to establish a connection. Additionally, this behavour may be encountered
+  at any point during life span of an MLLP.Client process should the connection be severed on either side. 
+
+  All connection, send, and receive failures will be logged as errors.
+
+  ## Examples
+
+  ### Sending messages as strings
+  ```
+  iex> {:ok, client} = MLLP.Client.start_link("127.0.0.1", 4090)
+  {:ok, #PID<0.369.0>} 
+  iex> msg = "MSH|^~\\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500|..."
+  "MSH|^~\\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500|..."
+  iex> MLLP.Client.send(client, msg)
+  {:ok, "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^A01^ACK|..."}
+  iex>
+  ```
+
+  ### Sending messages with `HL7.Message.t()`
+  ```
+  iex> {:ok, client} = MLLP.Client.start_link("127.0.0.1", 4090)
+  {:ok, #PID<0.369.0>}
+  iex> msg = HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
+  iex> MLLP.Client.send(client, msg)
+  {:ok, :application_accept,
+      %MLLP.Ack{
+      acknowledgement_code: "AA",
+      hl7_ack_message: nil,
+      text_message: "A real MLLP message dispatcher was not provided"
+  }}
+  ```
+
+  """
+
   use GenServer
   require Logger
 
@@ -42,12 +91,7 @@ defmodule MLLP.Client do
   @behaviour ClientContract
 
   @type pid_ref :: atom | pid | {atom, any} | {:via, atom, any}
-  @type ip_address ::
-          atom
-          | charlist
-          | {:local, binary | charlist}
-          | {byte, byte, byte, byte}
-          | {char, char, char, char, char, char, char, char}
+  @type ip_address :: :inet.socket_address() | String.t()
 
   @type t :: %MLLP.Client{
           socket: any(),
@@ -80,7 +124,8 @@ defmodule MLLP.Client do
 
   alias __MODULE__, as: State
 
-  ## API
+  ## API 
+  @doc false
   @spec format_error(term()) :: String.t()
   def format_error({:tls_alert, _} = err) do
     to_string(:ssl.format_error({:error, err}))
@@ -104,13 +149,32 @@ defmodule MLLP.Client do
 
   def format_error(err), do: inspect(err)
 
+  @doc """
+  Starts a new MLLP.Client.
+
+  MLLP.Client.start_link/4 will start a new MLLP.Client process. i
+
+  This function will raise a `RuntimeError` if an invalid `ip_address()` is provided. 
+
+
+  ## Options
+
+  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
+     `:infinity`. Defaults to `:infinity`.
+    
+  * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`). 
+     Note that `:binary`, `:packet`, and `:active` can not be overriden.
+
+  * `:tls_opts` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
+     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options, enable 
+     certificate revocation the `:crl_check` and `:crl_cache` options, and customize the enabled protocols and 
+     cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
+
+  """
   @spec start_link(
-          address ::
-            :inet.ip4_address()
-            | :inet.ip6_address()
-            | String.t(),
-          port :: non_neg_integer(),
-          options :: [keyword()]
+          address :: ip_address(),
+          port :: :inet.port_number(),
+          options :: ClientContract.options()
         ) :: {:ok, pid()}
 
   def start_link(address, port, options \\ []) do
@@ -120,12 +184,34 @@ defmodule MLLP.Client do
     )
   end
 
+  @doc """
+  Returns true if the connection is open and established, otherwise false.
+  """
   @spec is_connected?(pid :: pid()) :: boolean()
   def is_connected?(pid), do: GenServer.call(pid, :is_connected)
 
+  @doc """
+  Instructs thte client to disconnect (if connected) and attempt a reconnect.
+  """
   @spec reconnect(pid :: pid()) :: :ok
   def reconnect(pid), do: GenServer.call(pid, :reconnect)
 
+  @doc """
+  Sends a payload and and receives a response.
+
+  send/4 supports both `HL7.Message` and String.t(). 
+
+  All payloads will be wrapped in MLLP before being sent. Replies likewise are always unwrapped.
+
+  If the payload provided is an `HL7.Message.t()` the  acknowledment returned from the server
+  will always be verified via `MLLP.Ack.verify_ack_against_message/2`.
+
+  ## Options
+
+  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
+     `:infinity`. Defaults to `:infinity`.
+
+  """
   @spec send(
           pid :: pid,
           payload :: HL7.Message.t() | String.t() | binary(),
@@ -160,6 +246,12 @@ defmodule MLLP.Client do
     end
   end
 
+  @doc """
+  Sends a message without awaiting a response. 
+
+  Given the synchronous nature of MLLP/HL7 this function is mainly useful for 
+  testing purposes.
+  """
   def send_async(pid, payload, timeout \\ 5000)
 
   def send_async(pid, %HL7.Message{} = payload, timeout) do
@@ -170,14 +262,17 @@ defmodule MLLP.Client do
     GenServer.call(pid, {:send_async, payload}, timeout)
   end
 
+  @doc """
+  Stops an MLLP.Client given a MLLP.Client pid.
+
+  This function will always return `:ok` per `GenServer.stop/1`, thus
+  you may give it a pid that referencees a client that is already stopped.
+  """
   @spec stop(pid :: pid()) :: :ok
   def stop(pid), do: GenServer.stop(pid)
 
   ## GenServer callbacks
-  # ===================
-  # GenServer callbacks
-  # ===================
-
+  @doc false
   @spec init(Keyword.t()) :: {:ok, MLLP.Client.t(), {:continue, :init_socket}}
   def init(options) do
     opts =
@@ -190,6 +285,7 @@ defmodule MLLP.Client do
     {:ok, struct(State, opts), {:continue, :init_socket}}
   end
 
+  @doc false
   def handle_continue(:init_socket, state) do
     state1 = attempt_connection(state)
     {:noreply, state1}
@@ -281,6 +377,7 @@ defmodule MLLP.Client do
     end
   end
 
+  @doc false
   def handle_info(:timeout, state) do
     new_state =
       state
@@ -295,6 +392,7 @@ defmodule MLLP.Client do
     {:noreply, state}
   end
 
+  @doc false
   def terminate(reason, state) do
     Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
     stop_connection(state, reason, "process terminated")
