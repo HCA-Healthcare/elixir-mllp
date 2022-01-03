@@ -8,6 +8,7 @@ defmodule MLLP.ClientContract do
           auto_reconnect_interval: non_neg_integer(),
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
+          telemetry_module: nil,
           tls_opts: [:ssl.tls_client_option()]
         ]
 
@@ -81,6 +82,20 @@ defmodule MLLP.Client do
   }}
   ```
 
+
+  ### Using TLS 
+
+  ```
+  iex> {:ok, client} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "path/to/ca_certfile.pem"])
+  iex> msg = HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
+  iex> MLLP.Client.send(client, msg)
+  {:ok, :application_accept,
+      %MLLP.Ack{
+      acknowledgement_code: "AA",
+      hl7_ack_message: nil,
+      text_message: "A real MLLP message dispatcher was not provided"
+  }}
+  ```
   """
 
   use GenServer
@@ -156,7 +171,6 @@ defmodule MLLP.Client do
 
   This function will raise a `RuntimeError` if an invalid `ip_address()` is provided. 
 
-
   ## Options
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
@@ -165,10 +179,15 @@ defmodule MLLP.Client do
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`). 
      Note that `:binary`, `:packet`, and `:active` can not be overriden.
 
+  * `:telemetry_module` - A callback module for which MLLP.Client will call `YourTelmetryModule.exectute/3`. The 
+    callback will be passed an event name, meaasurements, and metadata. 
+    Defaults to `MLLP.DefaultTelemetry`.
+
   * `:tls_opts` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
-     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options, enable 
-     certificate revocation the `:crl_check` and `:crl_cache` options, and customize the enabled protocols and 
-     cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
+     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. Addtional 
+     hardening may be acheived though other ssl options  such as enabling certificate revocation via the 
+     `:crl_check` and `:crl_cache` options and customization of enabled protocols and cipher suites for your 
+     specific use-case. See [`:ssl`](`:ssl`) for details.
 
   """
   @spec start_link(
