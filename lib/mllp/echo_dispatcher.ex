@@ -9,21 +9,32 @@ defmodule MLLP.EchoDispatcher do
 
   @behaviour MLLP.Dispatcher
 
-  @spec dispatch(:mllp_hl7, binary(), MLLP.FramingContext.t()) :: {:ok, MLLP.FramingContext.t()}
-  def dispatch(:mllp_hl7, message, state) when is_binary(message) do
+  @spec dispatch(:mllp_hl7 | :mllp_unknown, binary(), MLLP.FramingContext.t()) ::
+          {:ok, MLLP.FramingContext.t()}
+  def dispatch(type, message, state) when is_binary(message) do
     Logger.info(
-      "The EchoDispatcher simply logs and discards messages. Message type: mllp_hl7 Message: #{message}"
+      "The EchoDispatcher simply logs and discards messages. Message type: #{to_string(type)} Message: #{message}"
     )
 
-    reply =
-      MLLP.Ack.get_ack_for_message(
-        message,
-        :application_reject,
-        "A real MLLP message dispatcher was not provided"
-      )
-      |> to_string()
-      |> MLLP.Envelope.wrap_message()
+    {:ok, %{state | reply_buffer: reply_for(message)}}
+  end
 
-    {:ok, %{state | reply_buffer: reply}}
+  defp reply_for(message) do
+    {msg, type} = new_hl7(message)
+
+    msg
+    |> MLLP.Ack.get_ack_for_message(type, "A real MLLP message dispatcher was not provided")
+    |> to_string()
+    |> MLLP.Envelope.wrap_message()
+  end
+
+  defp new_hl7(message) do
+    case HL7.Message.new(message) do
+      %HL7.InvalidMessage{} = msg ->
+        {msg, :application_reject}
+
+      %HL7.Message{} = msg ->
+        {msg, :application_accept}
+    end
   end
 end
