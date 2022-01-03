@@ -177,6 +177,10 @@ defmodule MLLP.Client do
 
   ## Options
 
+  * `:auto_reconnect_interval' - Specify the interval between connection attempts. Specifically, if an attempt
+     to establish a connection fails, either post-init or at some point during the life span of the client, the value
+     of this option shall determine how often to retry a reconnection. Defaults to 1000 milliseconds.
+
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
      `:infinity`. Defaults to `:infinity`.
     
