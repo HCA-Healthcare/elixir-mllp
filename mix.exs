@@ -73,7 +73,7 @@ defmodule MLLP.MixProject do
   defp docs() do
     [
       # The main page in the docs
-      main: "README",
+      main: "readme",
       extras: ["README.md"]
     ]
   end
