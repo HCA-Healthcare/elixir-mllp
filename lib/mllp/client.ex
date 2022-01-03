@@ -1,8 +1,7 @@
 defmodule MLLP.ClientContract do
   @moduledoc """
   MLLP.ClientContract provides the behavior implemented by MLLP.Client. It may be useful
-  for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/).
-
+  for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/)
   """
   @type error_type :: :connect_failure | :send_error | :recv_error
   @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
@@ -173,7 +172,7 @@ defmodule MLLP.Client do
 
   MLLP.Client.start_link/4 will start a new MLLP.Client process.
 
-  This function will raise a `RuntimeError` if an invalid `ip_address()` is provided. 
+  This function will raise a `ArgumentError` if an invalid `ip_address()` is provided. 
 
   ## Options
 
@@ -239,7 +238,6 @@ defmodule MLLP.Client do
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
      `:infinity`. Defaults to `:infinity`.
-
   """
   @spec send(
           pid :: pid,
