@@ -1,4 +1,9 @@
 defmodule MLLP.ClientContract do
+  @moduledoc """
+  MLLP.ClientContract provides the behavior implemented by MLLP.Client. It may be useful
+  for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/).
+
+  """
   @type error_type :: :connect_failure | :send_error | :recv_error
   @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
 
@@ -41,7 +46,7 @@ defmodule MLLP.Client do
   via [MLLP](https://www.hl7.org/documentcenter/public/wg/inm/mllp_transport_specification.PDF) over TCP.
 
   While MLLP is primarily used to send [HL7](https://en.wikipedia.org/wiki/Health_Level_7) messages, 
-  MLLP.Client can be used to send non-hl7 messages (e.g, XML, ..). 
+  MLLP.Client can be used to send non-hl7 messages, such as XML.
 
   ## Connection Behaviour 
 
@@ -81,7 +86,6 @@ defmodule MLLP.Client do
       text_message: "A real MLLP message dispatcher was not provided"
   }}
   ```
-
 
   ### Using TLS 
 
@@ -167,7 +171,7 @@ defmodule MLLP.Client do
   @doc """
   Starts a new MLLP.Client.
 
-  MLLP.Client.start_link/4 will start a new MLLP.Client process. i
+  MLLP.Client.start_link/4 will start a new MLLP.Client process.
 
   This function will raise a `RuntimeError` if an invalid `ip_address()` is provided. 
 
@@ -216,14 +220,16 @@ defmodule MLLP.Client do
   def reconnect(pid), do: GenServer.call(pid, :reconnect)
 
   @doc """
-  Sends a payload and and receives a response.
+  Sends a message and and receives a response.
 
   send/4 supports both `HL7.Message` and String.t(). 
 
-  All payloads will be wrapped in MLLP before being sent. Replies likewise are always unwrapped.
+  All messages and responses will be wrapped and unwrapped via `MLLP.Envelope.wrap_message/1` and 
+  `MLLP.Envelope.unwrap_message/1` respectively
 
-  If the payload provided is an `HL7.Message.t()` the  acknowledment returned from the server
-  will always be verified via `MLLP.Ack.verify_ack_against_message/2`.
+  If the payload provided is an `HL7.Message.t()` the acknowledment returned from the server
+  will always be verified via `MLLP.Ack.verify_ack_against_message/2`. This is the only case
+  where an `MLLP.Ack.ack_verification_result()` will be returned.
 
   ## Options
 
