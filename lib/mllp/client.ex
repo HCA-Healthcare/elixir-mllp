@@ -50,12 +50,12 @@ defmodule MLLP.Client do
   ## Connection Behaviour 
 
   Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address 
-  on the provided port. If a connection can not be immediately established the client will keep 
-  trying to establish a connecton per the value of `:auto_reconnect_interval` which defaults to 
-  1 second. Therefor it is possible that before a connection is fully established the caller
+  on the provided port. If a connection can not be immediately established, the client will keep 
+  trying to establish a connection per the value of `:auto_reconnect_interval` which defaults to 
+  1 second. Therefor it is possible that before a connection is fully established, the caller
   may attempt to send a message which will result in `MLLP.Client.Error.t()` being returned containing
-  the last error encountered in trying to establish a connection. Additionally, this behavour may be encountered
-  at any point during life span of an MLLP.Client process should the connection be severed on either side. 
+  the last error encountered in trying to establish a connection. Additionally, said behavour could be encountered
+  at any point during life span of an MLLP.Client process if the connection becomees severed on either side. 
 
   All connection, send, and receive failures will be logged as errors.
 
@@ -184,7 +184,7 @@ defmodule MLLP.Client do
      `:infinity`. Defaults to `:infinity`.
     
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`). 
-     Note that `:binary`, `:packet`, and `:active` can not be overriden.
+     Note that `:binary`, `:packet`, and `:active` can not be overridden.
 
   * `:telemetry_module` - A callback module for which MLLP.Client will call `YourTelmetryModule.exectute/3`. The 
     callback will be passed an event name, measurements, and metadata. 
@@ -192,7 +192,7 @@ defmodule MLLP.Client do
 
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. 
-     Addtionally further hardening may be acheived though other ssl options such as enabling 
+     Additionally, further hardening can be achieved though other ssl options such as enabling 
      certificate revocation via the `:crl_check` and `:crl_cache` options and customization of 
      enabled protocols and cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
 
@@ -217,7 +217,7 @@ defmodule MLLP.Client do
   def is_connected?(pid), do: GenServer.call(pid, :is_connected)
 
   @doc """
-  Instructs thte client to disconnect (if connected) and attempt a reconnect.
+  Instructs the client to disconnect (if connected) and attempt a reconnect.
   """
   @spec reconnect(pid :: pid()) :: :ok
   def reconnect(pid), do: GenServer.call(pid, :reconnect)
@@ -230,7 +230,7 @@ defmodule MLLP.Client do
   All messages and responses will be wrapped and unwrapped via `MLLP.Envelope.wrap_message/1` and 
   `MLLP.Envelope.unwrap_message/1` respectively
 
-  If the payload provided is an `HL7.Message.t()` the acknowledment returned from the server
+  In case the payload provided is an `HL7.Message.t()` the acknowledgment returned from the server
   will always be verified via `MLLP.Ack.verify_ack_against_message/2`. This is the only case
   where an `MLLP.Ack.ack_verification_result()` will be returned.
 
@@ -293,7 +293,7 @@ defmodule MLLP.Client do
   Stops an MLLP.Client given a MLLP.Client pid.
 
   This function will always return `:ok` per `GenServer.stop/1`, thus
-  you may give it a pid that referencees a client that is already stopped.
+  you may give it a pid tha references a client that is already stopped.
   """
   @spec stop(pid :: pid()) :: :ok
   def stop(pid), do: GenServer.stop(pid)
