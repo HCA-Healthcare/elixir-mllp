@@ -15,6 +15,8 @@ defmodule MLLP.Receiver do
     - `:transport_opts` - A map of parameters given to ranch as transport options. See
     [Ranch Documentation](https://ninenines.eu/docs/en/ranch/1.7/manual/) for all transport options that can be
     provided. The default `transport_opts` are `%{num_acceptors: 100, max_connections: 20_000}` if none are provided.
+    - `:context` - A map which will be kept in receiver. This state is also honored by `MLLP.FramingContext` and 
+      made available to `MLLP.Dispatcher` implementations as `:receiver_context` on `MLLP.FramingContext.t()`.
   """
 
   use GenServer
@@ -30,14 +32,16 @@ defmodule MLLP.Receiver do
           socket: any(),
           transport: any(),
           buffer: String.t(),
-          dispatcher_module: dispatcher()
+          dispatcher_module: dispatcher(),
+          context: map()
         }
 
   @type options() :: [
           port: pos_integer(),
           dispatcher: module(),
           packet_framer: module(),
-          transport_opts: :ranch.opts()
+          transport_opts: :ranch.opts(),
+          context: map()
         ]
 
   @behaviour :ranch_protocol
@@ -45,7 +49,8 @@ defmodule MLLP.Receiver do
   defstruct socket: nil,
             transport: nil,
             buffer: "",
-            dispatcher_module: nil
+            dispatcher_module: nil,
+            context: %{}
 
   @doc """
   Starts an MLLP.Receiver.
@@ -119,7 +124,13 @@ defmodule MLLP.Receiver do
           :ranch_tcp,
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
-          %{packet_framer_module: MLLP.DefaultPacketFramer, dispatcher_module: MLLP.EchoDispatcher, allowed_clients: %{}, verify: nil}
+           %{
+             packet_framer_module: MLLP.DefaultPacketFramer, 
+             dispatcher_module: MLLP.EchoDispatcher, 
+             context: %{}, 
+             allowed_clients: %{}, 
+             verify: nil
+           }
         ]},
         type: :supervisor,
         modules: [:ranch_listener_sup],
@@ -202,7 +213,8 @@ defmodule MLLP.Receiver do
       packet_framer_module: packet_framer_mod,
       dispatcher_module: dispatcher_mod,
       allowed_clients: allowed_clients,
-      verify: verify
+      verify: verify,
+      context: Keyword.get(opts, :context, %{})
     }
 
     %{
@@ -297,6 +309,7 @@ defmodule MLLP.Receiver do
           client_info: client_info,
           transport: transport,
           framing_context: %FramingContext{
+            receiver_context: Map.get(options, :context, %{}),
             packet_framer_module: Map.get(options, :packet_framer_module),
             dispatcher_module: Map.get(options, :dispatcher_module)
           }
