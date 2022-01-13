@@ -91,16 +91,18 @@ defmodule ReceiverTest do
   end
 
   describe "Receiver receiving data" do
-    test "frames and dispatches with custom_data" do
+    test "frames and dispatches with receiver_context" do
       port = 8129
 
       {:ok, _} =
-        Receiver.start(dispatcher: MLLP.DispatcherMock, custom_data: %{foo: :bar}, port: port)
+        Receiver.start(dispatcher: MLLP.DispatcherMock, context: %{foo: :bar}, port: port)
 
       msg = HL7.Examples.wikipedia_sample_hl7() |> MLLP.Envelope.wrap_message()
 
       MLLP.DispatcherMock
-      |> expect(:dispatch, fn :mllp_hl7, _, %FramingContext{custom_data: %{foo: :bar}} = state ->
+      |> expect(:dispatch, fn :mllp_hl7,
+                              _,
+                              %FramingContext{receiver_context: %{foo: :bar}} = state ->
         {:ok, %{state | reply_buffer: "MSA|AR|01052901"}}
       end)
 

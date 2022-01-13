@@ -4,7 +4,7 @@ defmodule MLLP.FramingContext do
             current_message_type: nil,
             packet_framer_module: MLLP.DefaultPacketFramer,
             dispatcher_module: nil,
-            custom_data: %{}
+            receiver_context: %{}
 
   @type t :: %__MODULE__{
           receiver_buffer: String.t(),
@@ -12,6 +12,6 @@ defmodule MLLP.FramingContext do
           current_message_type: atom(),
           packet_framer_module: atom,
           dispatcher_module: atom,
-          custom_data: map()
+          receiver_context: map()
         }
 end

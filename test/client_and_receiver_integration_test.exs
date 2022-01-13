@@ -76,7 +76,7 @@ defmodule ClientAndReceiverIntegrationTest do
                dispatcher_module: MLLP.EchoDispatcher,
                allowed_clients: %{},
                verify: nil,
-               custom_data: %{}
+               context: %{}
              }
            ]},
         type: :supervisor,
