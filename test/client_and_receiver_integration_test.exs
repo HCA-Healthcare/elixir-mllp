@@ -75,7 +75,8 @@ defmodule ClientAndReceiverIntegrationTest do
                packet_framer_module: MLLP.DefaultPacketFramer,
                dispatcher_module: MLLP.EchoDispatcher,
                allowed_clients: %{},
-               verify: nil
+               verify: nil,
+               custom_data: %{}
              }
            ]},
         type: :supervisor,
