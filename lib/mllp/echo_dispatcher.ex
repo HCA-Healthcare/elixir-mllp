@@ -11,9 +11,13 @@ defmodule MLLP.EchoDispatcher do
 
   @spec dispatch(:mllp_hl7 | :mllp_unknown, binary(), MLLP.FramingContext.t()) ::
           {:ok, MLLP.FramingContext.t()}
-  def dispatch(type, message, state) when is_binary(message) do
+  def dispatch(:mllp_unknown, _, state) do
+    {:ok, %{state | reply_buffer: "mllp_unknown"}}
+  end
+
+  def dispatch(:mllp_hl7, message, state) when is_binary(message) do
     Logger.info(
-      "The EchoDispatcher simply logs and discards messages. Message type: #{to_string(type)} Message: #{message}"
+      "The EchoDispatcher simply logs and discards messages. Message type: :mllp_hl7 Message: #{message}"
     )
 
     {:ok, %{state | reply_buffer: reply_for(message)}}

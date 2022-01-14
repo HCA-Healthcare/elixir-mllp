@@ -36,6 +36,6 @@ defmodule EchoDispatcherTest do
     # expected_state = %{state | reply_buffer: expected_reply}
 
     assert {:ok, state1} = EchoDispatcher.dispatch(:mllp_unknown, message, state)
-    assert state1.reply_buffer =~ "|P|2.5\rMSA|AR|"
+    assert state1.reply_buffer =~ "mllp_unknown"
   end
 end
