@@ -103,7 +103,7 @@ defmodule ReceiverTest do
       |> expect(:dispatch, fn :mllp_hl7,
                               _,
                               %FramingContext{receiver_context: %{foo: :bar}} = state ->
-        {:ok, %{state | reply_buffer: "MSA|AR|01052901"}}
+        {:ok, %{state | reply_buffer: "MSA|AA|01052901"}}
       end)
 
       capture_log(fn ->
