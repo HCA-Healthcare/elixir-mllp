@@ -6,10 +6,10 @@ defmodule ClientAndReceiverIntegrationTest do
 
   setup ctx do
     ack = {
-      :error,
-      :application_reject,
+      :ok,
+      :application_accept,
       %MLLP.Ack{
-        acknowledgement_code: "AR",
+        acknowledgement_code: "AA",
         hl7_ack_message: nil,
         text_message: "A real MLLP message dispatcher was not provided"
       }
@@ -39,7 +39,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
       capture_log(fn ->
-        assert {:error, _, _ack} =
+        assert {:ok, _, _ack} =
                  MLLP.Client.send(
                    client_pid,
                    HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
