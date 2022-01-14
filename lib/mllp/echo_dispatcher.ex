@@ -12,7 +12,8 @@ defmodule MLLP.EchoDispatcher do
   @spec dispatch(:mllp_hl7 | :mllp_unknown, binary(), MLLP.FramingContext.t()) ::
           {:ok, MLLP.FramingContext.t()}
   def dispatch(:mllp_unknown, _, state) do
-    {:ok, %{state | reply_buffer: "mllp_unknown"}}
+    msg = MLLP.Envelope.wrap_message("mllp_unknown")
+    {:ok, %{state | reply_buffer: msg}}
   end
 
   def dispatch(:mllp_hl7, message, state) when is_binary(message) do
