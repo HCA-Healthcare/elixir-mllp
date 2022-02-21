@@ -15,7 +15,7 @@ defmodule MLLP.Receiver do
     - `:transport_opts` - A map of parameters given to ranch as transport options. See
     [Ranch Documentation](https://ninenines.eu/docs/en/ranch/1.7/manual/) for all transport options that can be
     provided. The default `transport_opts` are `%{num_acceptors: 100, max_connections: 20_000}` if none are provided.
-    - `:context` - A map which will be kept in receiver. This state is also honored by `MLLP.FramingContext` and 
+    - `:context` - A map which will be kept in receiver. This state is also honored by `MLLP.FramingContext` and
       made available to `MLLP.Dispatcher` implementations as `:receiver_context` on `MLLP.FramingContext.t()`.
   """
 
@@ -125,10 +125,10 @@ defmodule MLLP.Receiver do
           %{socket_opts: [port: 4090], num_acceptors: 100, max_connections: 20_000},
           MLLP.Receiver,
            %{
-             packet_framer_module: MLLP.DefaultPacketFramer, 
-             dispatcher_module: MLLP.EchoDispatcher, 
-             context: %{}, 
-             allowed_clients: %{}, 
+             packet_framer_module: MLLP.DefaultPacketFramer,
+             dispatcher_module: MLLP.EchoDispatcher,
+             context: %{},
+             allowed_clients: %{},
              verify: nil
            }
         ]},
@@ -353,7 +353,10 @@ defmodule MLLP.Receiver do
   end
 
   defp implements_behaviour?(mod, behaviour) do
-    behaviours_found = Keyword.get(mod.__info__(:attributes), :behaviour, [])
+    behaviours_found =
+      Keyword.get_values(mod.__info__(:attributes), :behaviour)
+      |> List.flatten()
+
     behaviour in behaviours_found
   end
 
