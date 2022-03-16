@@ -80,7 +80,7 @@ defmodule MLLP.Client do
 
   alias __MODULE__, as: State
 
-  ## API 
+  ## API
   @spec format_error(term()) :: String.t()
   def format_error({:tls_alert, _} = err) do
     to_string(:ssl.format_error({:error, err}))
@@ -428,32 +428,13 @@ defmodule MLLP.Client do
   defp normalize_address!({_, _, _, _, _, _, _, _} = addr), do: addr
 
   defp normalize_address!(addr) when is_binary(addr) do
-    case String.contains?(addr, ".") do
-      true ->
-        addr
-        |> String.to_charlist()
-        |> parse_address!()
-
-      false ->
-        # hostname
-        String.to_charlist(addr)
-    end
+    String.to_charlist(addr)
   end
 
-  defp normalize_address!(addr) when is_list(addr), do: parse_address!(addr)
+  defp normalize_address!(addr) when is_list(addr), do: addr
 
   defp normalize_address!(addr) when is_atom(addr), do: addr
 
   defp normalize_address!(addr),
     do: raise(ArgumentError, "Invalid server ip address : #{inspect(addr)}")
-
-  defp parse_address!(addr) do
-    case :inet.parse_address(addr) do
-      {:error, _} ->
-        raise ArgumentError, "Invalid server ip address : #{inspect(addr)}"
-
-      {:ok, valid} ->
-        valid
-    end
-  end
 end
