@@ -27,8 +27,8 @@ defmodule ClientTest do
       assert {:ok, _} = MLLP.Client.start_link("::1", 9999)
 
       assert {:ok, _} = MLLP.Client.start_link(:localhost, 9999)
-      assert {:ok, _} = MLLP.Client.start_link("servera.unix.medcity.net", 9999)
-      assert {:ok, _} = MLLP.Client.start_link('servera.unix.medcity.net', 9999)
+      assert {:ok, _} = MLLP.Client.start_link("servera.app.net", 9999)
+      assert {:ok, _} = MLLP.Client.start_link('servera.unix.city.net', 9999)
       assert {:ok, _} = MLLP.Client.start_link('127.0.0.1', 9999)
     end
 
