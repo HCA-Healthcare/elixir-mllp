@@ -36,19 +36,5 @@ defmodule MLLP.Logger do
   defp parse_value(value), do: "#{inspect(value)}"
 
   defp parse_data([]), do: ""
-
-  defp parse_data(data) do
-    count = length(data)
-
-    {data, _} =
-      Enum.reduce(data, {" -", 1}, fn
-        {k, v}, {str, ^count} ->
-          {str <> " #{k}: #{parse_value(v)}", count}
-
-        {k, v}, {str, r} ->
-          {str <> " #{k}: #{parse_value(v)},", r + 1}
-      end)
-
-    data
-  end
+  defp parse_data(data), do: " - " <> inspect(data)
 end

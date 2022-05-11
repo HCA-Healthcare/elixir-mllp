@@ -15,20 +15,14 @@ defmodule MLLP.LoggerTest do
     test "returns message and data with nil reason" do
       assert capture_log(fn ->
                Logger.warn("message", nil, one: "one")
-             end) =~ "[MLLP] message - one: one"
+             end) =~ "[MLLP] message - [one: \"one\"]"
     end
 
-    test "don't include commas when only 1 option is provided" do
-      assert capture_log(fn ->
-               Logger.warn("message", :reason, one: "one")
-             end) =~ "[MLLP] message: :reason - one: one"
-    end
-
-    test "log message adds comma between data opts" do
+    test "log message with multiple data opts" do
       assert capture_log(fn ->
                Logger.warn("message", :reason, one: "one", two: 2, three: :other)
              end) =~
-               "[MLLP] message: :reason - one: one, two: 2, three: :other"
+               "[MLLP] message: :reason - [one: \"one\", two: 2, three: :other]"
     end
   end
 
@@ -36,13 +30,13 @@ defmodule MLLP.LoggerTest do
     test "don't include commas when only 1 option is provided" do
       assert capture_log(fn ->
                Logger.error("message", :reason, one: "one")
-             end) =~ "[MLLP] message: :reason - one: one"
+             end) =~ "[MLLP] message: :reason - [one: \"one\"]"
     end
 
     test "log message adds comma between data opts" do
       assert capture_log(fn ->
                Logger.error("message", :reason, one: "one", two: 2, three: :other)
-             end) =~ "[MLLP] message: :reason - one: one, two: 2, three: :other"
+             end) =~ "[MLLP] message: :reason - [one: \"one\", two: 2, three: :other]"
     end
   end
 end
