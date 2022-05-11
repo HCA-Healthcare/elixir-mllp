@@ -41,7 +41,7 @@ end
 
 defmodule MLLP.Client do
   @moduledoc """
-  MLLP.Client provides a simple tcp client for sending and receiving data i
+  MLLP.Client provides a simple tcp client for sending and receiving data
   via [MLLP](https://www.hl7.org/documentcenter/public/wg/inm/mllp_transport_specification.PDF) over TCP.
 
   While MLLP is primarily used to send [HL7](https://en.wikipedia.org/wiki/Health_Level_7) messages, 
@@ -57,12 +57,19 @@ defmodule MLLP.Client do
   the last error encountered in trying to establish a connection. Additionally, said behavour could be encountered
   at any point during life span of an MLLP.Client process if the connection becomees severed on either side. 
 
-  All connection, send, and receive failures will be logged as errors.
+  All connections, send, and receive failures will be logged as errors.
 
   ## Examples
 
   ### Sending messages as strings
   ```
+  iex> MLLP.Receiver.start(dispatcher: MLLP.EchoDispatcher, port: 4090)
+  {:ok,
+  %{
+    pid: #PID<0.2167.0>,
+    port: 4090,
+    receiver_id: #Reference<0.3312799297.2467299337.218126>
+  }}
   iex> {:ok, client} = MLLP.Client.start_link("127.0.0.1", 4090)
   {:ok, #PID<0.369.0>} 
   iex> msg = "MSH|^~\\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500|..."
@@ -74,6 +81,13 @@ defmodule MLLP.Client do
 
   ### Sending messages with `HL7.Message.t()`
   ```
+  iex> MLLP.Receiver.start(dispatcher: MLLP.EchoDispatcher, port: 4090)
+  {:ok,
+  %{
+    pid: #PID<0.2167.0>,
+    port: 4090,
+    receiver_id: #Reference<0.3312799297.2467299337.218126>
+  }}
   iex> {:ok, client} = MLLP.Client.start_link("127.0.0.1", 4090)
   {:ok, #PID<0.369.0>}
   iex> msg = HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
@@ -88,7 +102,14 @@ defmodule MLLP.Client do
 
   ### Using TLS 
 
-  ```
+  ```     
+  iex> tls_opts = [
+    cacertfile: "/path/to/ca_certificate.pem",
+    verify: :verify_peer,
+    certfile: "/path/to/server_certificate.pem",
+    keyfile: "/path/to/private_key.pem"
+  ]
+  iex> MLLP.Receiver.start(dispatcher: MLLP.EchoDispatcher, port: 4090, tls: tls_opts)
   iex> {:ok, client} = MLLP.Client.start_link("localhost", 8154, tls: [verify: :verify_peer, cacertfile: "path/to/ca_certfile.pem"])
   iex> msg = HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
   iex> MLLP.Client.send(client, msg)
@@ -186,13 +207,9 @@ defmodule MLLP.Client do
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`). 
      Note that `:binary`, `:packet`, and `:active` can not be overridden.
 
-  * `:telemetry_module` - A callback module for which MLLP.Client will call `YourTelmetryModule.exectute/3`. The 
-    callback will be passed an event name, measurements, and metadata. 
-    Defaults to `MLLP.DefaultTelemetry`.
-
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. 
-     Additionally, further hardening can be achieved though other ssl options such as enabling 
+     Additionally, further hardening can be achieved through other ssl options such as enabling 
      certificate revocation via the `:crl_check` and `:crl_cache` options and customization of 
      enabled protocols and cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
 
@@ -223,7 +240,7 @@ defmodule MLLP.Client do
   def reconnect(pid), do: GenServer.call(pid, :reconnect)
 
   @doc """
-  Sends a message and and receives a response.
+  Sends a message and receives a response.
 
   send/4 supports both `HL7.Message` and String.t(). 
 
@@ -293,7 +310,7 @@ defmodule MLLP.Client do
   Stops an MLLP.Client given a MLLP.Client pid.
 
   This function will always return `:ok` per `GenServer.stop/1`, thus
-  you may give it a pid tha references a client that is already stopped.
+  you may give it a pid that references a client which is already stopped.
   """
   @spec stop(pid :: pid()) :: :ok
   def stop(pid), do: GenServer.stop(pid)
