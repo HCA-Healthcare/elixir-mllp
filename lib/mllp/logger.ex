@@ -29,11 +29,11 @@ defmodule MLLP.Logger do
   end
 
   defp compose_message(message, reason, data) do
-    "[MLLP] #{message}: " <> parse_reason(reason) <> parse_data(data)
+    "[MLLP] #{message}: " <> parse_value(reason) <> parse_data(data)
   end
 
-  defp parse_reason(reason) when is_binary(reason), do: "#{reason}"
-  defp parse_reason(reason), do: "#{inspect(reason)}"
+  defp parse_value(value) when is_binary(value), do: "#{value}"
+  defp parse_value(value), do: "#{inspect(value)}"
 
   defp parse_data([]), do: ""
 
@@ -43,10 +43,10 @@ defmodule MLLP.Logger do
     {data, _} =
       Enum.reduce(data, {" -", 1}, fn
         {k, v}, {str, ^count} ->
-          {str <> " #{k}: #{inspect(v)}", count}
+          {str <> " #{k}: #{parse_value(v)}", count}
 
         {k, v}, {str, r} ->
-          {str <> " #{k}: #{inspect(v)},", r + 1}
+          {str <> " #{k}: #{parse_value(v)},", r + 1}
       end)
 
     data
