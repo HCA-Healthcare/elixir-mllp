@@ -9,7 +9,7 @@ defmodule MLLP.LoggerTest do
     test "returns only message" do
       assert capture_log(fn ->
                Logger.warn("message")
-             end) =~ "[warning] [MLLP] message"
+             end) =~ "[MLLP] message"
     end
 
     test "returns message and data with nil reason" do
