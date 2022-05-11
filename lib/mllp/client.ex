@@ -228,18 +228,24 @@ defmodule MLLP.Client do
         case state.tcp.recv(state.socket, 0, options1.reply_timeout) do
           {:ok, reply} ->
             telemetry(:received, %{response: reply}, state)
+            Logger.info("[Client] message sent with response", reply)
+
             {:reply, {:ok, reply}, state}
 
           {:error, reason} ->
+            message = format_error(reason)
+
             telemetry(
               :status,
               %{
                 status: :disconnected,
-                error: format_error(reason),
+                error: message,
                 context: "receive ACK failure"
               },
               state
             )
+
+            Logger.error("[Client] receive ack failure", message)
 
             new_state = maintain_reconnect_timer(state)
             reply = {:error, new_error(:recv, reason)}
@@ -247,11 +253,15 @@ defmodule MLLP.Client do
         end
 
       {:error, reason} ->
+        message = format_error(reason)
+
         telemetry(
           :status,
-          %{status: :disconnected, error: format_error(reason), context: "send message failure"},
+          %{status: :disconnected, error: message, context: "send message failure"},
           state
         )
+
+        Logger.error("[Client] error sending message", message)
 
         new_state = maintain_reconnect_timer(state)
         reply = {:error, new_error(:send, reason)}
@@ -268,11 +278,15 @@ defmodule MLLP.Client do
         {:reply, {:ok, :sent}, state}
 
       {:error, reason} ->
+        message = format_error(reason)
+
         telemetry(
           :status,
-          %{status: :disconnected, error: format_error(reason), context: "send message failure"},
+          %{status: :disconnected, error: message, context: "send message failure"},
           state
         )
+
+        Logger.error("[Client] error sending message", message)
 
         new_state = maintain_reconnect_timer(state)
         reply = {:error, new_error(:send, reason)}
@@ -290,22 +304,26 @@ defmodule MLLP.Client do
   end
 
   def handle_info(unknown, state) do
-    Logger.warn("Unknown kernel message received", unknown)
+    Logger.warn("[Client] Unknown kernel message received", unknown)
     {:noreply, state}
   end
 
   def terminate(reason, state) do
-    Logger.error("Client socket terminated", reason, state: state)
+    Logger.error("[Client] socket terminated", reason, state: state)
     stop_connection(state, reason, "process terminated")
   end
 
   defp stop_connection(%State{} = state, error, context) do
     if state.socket != nil do
+      message = format_error(error)
+
       telemetry(
         :status,
-        %{status: :disconnected, error: format_error(error), context: context},
+        %{status: :disconnected, error: message, context: context},
         state
       )
+
+      Logger.info("[Client] connection stopped", message, context: context)
 
       state.tcp.close(state.socket)
     end
@@ -327,19 +345,21 @@ defmodule MLLP.Client do
     case state.tcp.connect(state.address, state.port, opts, 2000) do
       {:ok, socket} ->
         state1 = ensure_pending_reconnect_cancelled(state)
-        Logger.info("Client succesfully connected to", state1.socket_address)
         telemetry(:status, %{status: :connected}, state1)
+        Logger.info("[Client] succesfully connected", state1.socket_address)
+
         %{state1 | socket: socket, connect_failure: nil}
 
       {:error, reason} ->
         message = format_error(reason)
-        Logger.error("Error connecting to #{state.socket_address}", message)
 
         telemetry(
           :status,
           %{status: :disconnected, error: message, context: "connect failure"},
           state
         )
+
+        Logger.error("[Client] error connecting to #{state.socket_address}", message)
 
         state
         |> maintain_reconnect_timer()

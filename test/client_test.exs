@@ -82,7 +82,7 @@ defmodule ClientTest do
                Kernel.send(pid, :eh?)
                Process.sleep(100)
                assert Process.alive?(pid)
-             end) =~ "Unknown kernel message received: :eh?"
+             end) =~ "[Client] Unknown kernel message received: :eh?"
     end
   end
 
@@ -94,7 +94,7 @@ defmodule ClientTest do
                Kernel.send(pid, {:EXIT, self(), :normal})
                Process.sleep(100)
                refute Process.alive?(pid)
-             end) =~ "Client socket terminated: :normal - [state: %MLLP.Client"
+             end) =~ "[Client] socket terminated: :normal - [state: %MLLP.Client"
     end
   end
 
