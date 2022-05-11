@@ -35,9 +35,8 @@ end
 
 defmodule MLLP.Client do
   use GenServer
-  require Logger
 
-  alias MLLP.{Envelope, Ack, ClientContract, TCP, TLS}
+  alias MLLP.{Envelope, Ack, ClientContract, Logger, TCP, TLS}
 
   @behaviour ClientContract
 
@@ -291,12 +290,12 @@ defmodule MLLP.Client do
   end
 
   def handle_info(unknown, state) do
-    Logger.warn("Unknown kernel message received => #{inspect(unknown)}")
+    Logger.warn("Unknown kernel message received", unknown)
     {:noreply, state}
   end
 
   def terminate(reason, state) do
-    Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
+    Logger.error("Client socket terminated", reason, state: state)
     stop_connection(state, reason, "process terminated")
   end
 
@@ -328,16 +327,17 @@ defmodule MLLP.Client do
     case state.tcp.connect(state.address, state.port, opts, 2000) do
       {:ok, socket} ->
         state1 = ensure_pending_reconnect_cancelled(state)
+        Logger.info("Client succesfully connected to", state1.socket_address)
         telemetry(:status, %{status: :connected}, state1)
         %{state1 | socket: socket, connect_failure: nil}
 
       {:error, reason} ->
         message = format_error(reason)
-        Logger.error(fn -> "Error connecting to #{state.socket_address} => #{message}" end)
+        Logger.error("Error connecting to #{state.socket_address}", message)
 
         telemetry(
           :status,
-          %{status: :disconnected, error: format_error(reason), context: "connect failure"},
+          %{status: :disconnected, error: message, context: "connect failure"},
           state
         )
 

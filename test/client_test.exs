@@ -82,7 +82,19 @@ defmodule ClientTest do
                Kernel.send(pid, :eh?)
                Process.sleep(100)
                assert Process.alive?(pid)
-             end) =~ "Unknown kernel message received => :eh?"
+             end) =~ "Unknown kernel message received: :eh?"
+    end
+  end
+
+  describe "terminate/2" do
+    test "handles exit message" do
+      assert {:ok, pid} = MLLP.Client.start_link({127, 0, 0, 1}, 9998)
+
+      assert capture_log(fn ->
+               Kernel.send(pid, {:EXIT, self(), :normal})
+               Process.sleep(100)
+               refute Process.alive?(pid)
+             end) =~ "Client socket terminated: :normal - state: %MLLP.Client"
     end
   end
 

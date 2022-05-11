@@ -27,7 +27,7 @@ defmodule MLLP.PacketFramer do
     quote do
       @behaviour MLLP.PacketFramer
 
-      require Logger
+      alias MLLP.Logger
 
       @doc false
       @spec handle_packet(packet :: String.t(), state :: MLLP.FramingContext.t()) ::
@@ -174,7 +174,7 @@ defmodule MLLP.PacketFramer do
       end
 
       def handle_unframed(unframed) do
-        Logger.error("The DefaultPacketFramer is discarding unexpected data: #{unframed}")
+        Logger.error("The DefaultPacketFramer is discarding unexpected data", unframed)
       end
 
       defoverridable handle_unframed: 1

@@ -21,9 +21,8 @@ defmodule MLLP.Receiver do
 
   use GenServer
 
-  require Logger
-
   alias MLLP.FramingContext
+  alias MLLP.Logger
   alias MLLP.Peer
 
   @type dispatcher :: any()
@@ -319,7 +318,7 @@ defmodule MLLP.Receiver do
         :gen_server.enter_loop(__MODULE__, [], state)
 
       {:error, error} ->
-        Logger.warn("Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}")
+        Logger.warn("Failed to verify client", client_info, error: error)
 
         {:stop,
          %{message: "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}"}}
@@ -327,28 +326,28 @@ defmodule MLLP.Receiver do
   end
 
   def handle_info({message, socket, data}, state) when message in [:tcp, :ssl] do
-    Logger.debug(fn -> "Receiver received data: [#{inspect(data)}]." end)
+    Logger.debug("Receiver received data", "[#{inspect(data)}]")
     framing_context = handle_received_data(socket, data, state.framing_context, state.transport)
     {:noreply, %{state | framing_context: framing_context}}
   end
 
   def handle_info({message, _socket}, state) when message in [:tcp_closed, :ssl_closed] do
-    Logger.debug("MLLP.Receiver tcp_closed.")
+    Logger.debug("Receiver tcp_closed", message)
     {:stop, :normal, state}
   end
 
   def handle_info({message, _, reason}, state) when message in [:tcp_error, :tls_error] do
-    Logger.error(fn -> "MLLP.Receiver encountered a tcp_error: [#{inspect(reason)}]" end)
+    Logger.error("Receiver encountered a tcp_error", "[#{inspect(reason)}]")
     {:stop, reason, state}
   end
 
   def handle_info(:timeout, state) do
-    Logger.debug("Receiver timed out.")
+    Logger.debug("Receiver timed out")
     {:stop, :normal, state}
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Unexpected handle_info for msg [#{inspect(msg)}].")
+    Logger.warn("Unexpected handle_info for msg", "[#{inspect(msg)}]")
     {:noreply, state}
   end
 
@@ -418,7 +417,9 @@ defmodule MLLP.Receiver do
 
       error ->
         Logger.warn(
-          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list"
+          "Receiver invalid IP/hostname, will be filtered from allowed_clients list",
+          name,
+          error: error
         )
 
         nil
