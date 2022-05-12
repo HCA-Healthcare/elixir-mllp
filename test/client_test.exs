@@ -2,7 +2,6 @@ defmodule ClientTest do
   use ExUnit.Case, async: false
   alias MLLP.Client
   alias MLLP.Client.Error
-  doctest Client
 
   import Mox
   import ExUnit.CaptureLog
