@@ -10,6 +10,7 @@ defmodule MLLP.ClientContract do
 
   @type options :: [
           auto_reconnect_interval: non_neg_integer(),
+          use_backoff: boolean(),
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
@@ -44,18 +45,18 @@ defmodule MLLP.Client do
   MLLP.Client provides a simple tcp client for sending and receiving data
   via [MLLP](https://www.hl7.org/documentcenter/public/wg/inm/mllp_transport_specification.PDF) over TCP.
 
-  While MLLP is primarily used to send [HL7](https://en.wikipedia.org/wiki/Health_Level_7) messages, 
+  While MLLP is primarily used to send [HL7](https://en.wikipedia.org/wiki/Health_Level_7) messages,
   MLLP.Client can be used to send non-hl7 messages, such as XML.
 
-  ## Connection Behaviour 
+  ## Connection Behaviour
 
-  Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address 
-  on the provided port. If a connection can not be immediately established, the client will keep 
-  trying to establish a connection per the value of `:auto_reconnect_interval` which defaults to 
+  Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address
+  on the provided port. If a connection can not be immediately established, the client will keep
+  trying to establish a connection per the value of `:auto_reconnect_interval` which defaults to
   1 second. Therefor it is possible that before a connection is fully established, the caller
   may attempt to send a message which will result in `MLLP.Client.Error.t()` being returned containing
   the last error encountered in trying to establish a connection. Additionally, said behavour could be encountered
-  at any point during life span of an MLLP.Client process if the connection becomees severed on either side. 
+  at any point during life span of an MLLP.Client process if the connection becomees severed on either side.
 
   All connections, send, and receive failures will be logged as errors.
 
@@ -71,7 +72,7 @@ defmodule MLLP.Client do
     receiver_id: #Reference<0.3312799297.2467299337.218126>
   }}
   iex> {:ok, client} = MLLP.Client.start_link("127.0.0.1", 4090)
-  {:ok, #PID<0.369.0>} 
+  {:ok, #PID<0.369.0>}
   iex> msg = "MSH|^~\\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500|..."
   "MSH|^~\\&|MegaReg|XYZHospC|SuperOE|XYZImgCtr|20060529090131-0500|..."
   iex> MLLP.Client.send(client, msg)
@@ -100,9 +101,9 @@ defmodule MLLP.Client do
   }}
   ```
 
-  ### Using TLS 
+  ### Using TLS
 
-  ```     
+  ```
   iex> tls_opts = [
     cacertfile: "/path/to/ca_certificate.pem",
     verify: :verify_peer,
@@ -143,7 +144,8 @@ defmodule MLLP.Client do
           telemetry_module: module() | nil,
           tcp: module() | nil,
           tls_opts: Keyword.t(),
-          socket_opts: Keyword.t()
+          socket_opts: Keyword.t(),
+          backoff: any()
         }
 
   defstruct socket: nil,
@@ -159,11 +161,12 @@ defmodule MLLP.Client do
             host_string: nil,
             send_opts: %{},
             tls_opts: [],
-            socket_opts: []
+            socket_opts: [],
+            backoff: nil
 
   alias __MODULE__, as: State
 
-  ## API 
+  ## API
   @doc false
   @spec format_error(term()) :: String.t()
   def format_error({:tls_alert, _} = err) do
@@ -193,7 +196,7 @@ defmodule MLLP.Client do
 
   MLLP.Client.start_link/4 will start a new MLLP.Client process.
 
-  This function will raise a `ArgumentError` if an invalid `ip_address()` is provided. 
+  This function will raise a `ArgumentError` if an invalid `ip_address()` is provided.
 
   ## Options
 
@@ -201,16 +204,21 @@ defmodule MLLP.Client do
      to establish a connection fails, either post-init or at some point during the life span of the client, the value
      of this option shall determine how often to retry a reconnection. Defaults to 1000 milliseconds.
 
-  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
+  * `:use_backoff` - Specify if an exponential backoff should be used for connection. When an attempt
+     to establish a connection fails, either post-init or at some point during the life span of the client,
+     the backoff value will determine how often to retry a reconnection. Starst at 1 second and increases
+     it until reaching 180 seconds.  Defaults to `false`.
+
+  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
      `:infinity`. Defaults to `:infinity`.
-    
-  * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`). 
+
+  * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`).
      Note that `:binary`, `:packet`, and `:active` can not be overridden.
 
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
-     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options. 
-     Additionally, further hardening can be achieved through other ssl options such as enabling 
-     certificate revocation via the `:crl_check` and `:crl_cache` options and customization of 
+     set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
+     Additionally, further hardening can be achieved through other ssl options such as enabling
+     certificate revocation via the `:crl_check` and `:crl_cache` options and customization of
      enabled protocols and cipher suites for your specific use-case. See [`:ssl`](`:ssl`) for details.
 
   """
@@ -242,9 +250,9 @@ defmodule MLLP.Client do
   @doc """
   Sends a message and receives a response.
 
-  send/4 supports both `HL7.Message` and String.t(). 
+  send/4 supports both `HL7.Message` and String.t().
 
-  All messages and responses will be wrapped and unwrapped via `MLLP.Envelope.wrap_message/1` and 
+  All messages and responses will be wrapped and unwrapped via `MLLP.Envelope.wrap_message/1` and
   `MLLP.Envelope.unwrap_message/1` respectively
 
   In case the payload provided is an `HL7.Message.t()` the acknowledgment returned from the server
@@ -253,7 +261,7 @@ defmodule MLLP.Client do
 
   ## Options
 
-  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or 
+  * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
      `:infinity`. Defaults to `:infinity`.
   """
   @spec send(
@@ -291,9 +299,9 @@ defmodule MLLP.Client do
   end
 
   @doc """
-  Sends a message without awaiting a response. 
+  Sends a message without awaiting a response.
 
-  Given the synchronous nature of MLLP/HL7 this function is mainly useful for 
+  Given the synchronous nature of MLLP/HL7 this function is mainly useful for
   testing purposes.
   """
   def send_async(pid, payload, timeout \\ 5000)
@@ -458,9 +466,15 @@ defmodule MLLP.Client do
 
   defp ensure_pending_reconnect_cancelled(%{pending_reconnect: nil} = state), do: state
 
-  defp ensure_pending_reconnect_cancelled(state) do
+  defp ensure_pending_reconnect_cancelled(%{backoff: nil} = state) do
     :ok = Process.cancel_timer(state.pending_reconnect, info: false)
     %{state | pending_reconnect: nil}
+  end
+
+  defp ensure_pending_reconnect_cancelled(%{backoff: backoff} = state) do
+    :ok = Process.cancel_timer(state.pending_reconnect, info: false)
+    {_, new_backoff} = :backoff.succeed(backoff)
+    %{state | pending_reconnect: nil, backoff: new_backoff}
   end
 
   defp attempt_connection(%State{} = state) do
@@ -489,12 +503,25 @@ defmodule MLLP.Client do
     end
   end
 
-  defp maintain_reconnect_timer(state) do
-    ref =
-      state.pending_reconnect ||
-        Process.send_after(self(), :timeout, state.auto_reconnect_interval)
+  defp maintain_reconnect_timer(%{pending_reconnect: ref} = state) when is_reference(ref),
+    do: state
+
+  defp maintain_reconnect_timer(%{backoff: nil} = state) do
+    ref = Process.send_after(self(), :timeout, state.auto_reconnect_interval)
 
     %State{state | pending_reconnect: ref}
+  end
+
+  defp maintain_reconnect_timer(%{backoff: backoff} = state) do
+    seconds =
+      backoff
+      |> :backoff.get()
+      |> :timer.seconds()
+
+    ref = Process.send_after(self(), :timeout, seconds)
+    {_, new_backoff} = :backoff.fail(backoff)
+
+    %State{state | pending_reconnect: ref, backoff: new_backoff}
   end
 
   defp telemetry(_event_name, _measurements, %State{telemetry_module: nil} = _metadata) do
@@ -529,6 +556,7 @@ defmodule MLLP.Client do
 
   defp maybe_set_default_options(opts) do
     socket_module = if opts.tls == [], do: TCP, else: TLS
+    backoff = if opts[:use_backoff], do: :backoff.init(1, 180), else: nil
 
     send_opts = Map.take(opts, Map.keys(@default_send_opts))
 
@@ -540,6 +568,7 @@ defmodule MLLP.Client do
     |> Map.put(:pid, self())
     |> Map.put(:tls_opts, opts.tls)
     |> Map.put(:send_opts, send_opts)
+    |> Map.put(:backoff, backoff)
   end
 
   defp put_socket_address(%{address: address, port: port} = opts) do
