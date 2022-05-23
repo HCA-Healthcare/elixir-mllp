@@ -11,6 +11,7 @@ defmodule MLLP.ClientContract do
   @type options :: [
           auto_reconnect_interval: non_neg_integer(),
           use_backoff: boolean(),
+          backoff_max_seconds: integer(),
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
@@ -207,7 +208,10 @@ defmodule MLLP.Client do
   * `:use_backoff` - Specify if an exponential backoff should be used for connection. When an attempt
      to establish a connection fails, either post-init or at some point during the life span of the client,
      the backoff value will determine how often to retry a reconnection. Starst at 1 second and increases
-     it until reaching 180 seconds.  Defaults to `false`.
+     exponentially until reaching `backoff_max_seconds` seconds.  Defaults to `false`.
+
+  * `:backoff_max_seconds` - Specify the max limit of seconds the backoff reconection attempt should take,
+     defauls to 180 (3 mins).
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
      `:infinity`. Defaults to `:infinity`.
@@ -556,7 +560,8 @@ defmodule MLLP.Client do
 
   defp maybe_set_default_options(opts) do
     socket_module = if opts.tls == [], do: TCP, else: TLS
-    backoff = if opts[:use_backoff], do: :backoff.init(1, 180), else: nil
+    backoff_seconds = opts[:backoff_max_seconds] || 180
+    backoff = if opts[:use_backoff], do: :backoff.init(1, backoff_seconds), else: nil
 
     send_opts = Map.take(opts, Map.keys(@default_send_opts))
 
