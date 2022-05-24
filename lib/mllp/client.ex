@@ -201,17 +201,18 @@ defmodule MLLP.Client do
 
   ## Options
 
-  * `:auto_reconnect_interval` - Specify the interval between connection attempts. Specifically, if an attempt
-     to establish a connection fails, either post-init or at some point during the life span of the client, the value
-     of this option shall determine how often to retry a reconnection. Defaults to 1000 milliseconds.
-
   * `:use_backoff` - Specify if an exponential backoff should be used for connection. When an attempt
      to establish a connection fails, either post-init or at some point during the life span of the client,
-     the backoff value will determine how often to retry a reconnection. Starst at 1 second and increases
-     exponentially until reaching `backoff_max_seconds` seconds.  Defaults to `false`.
+     the backoff value will determine how often to retry a reconnection. Starts at 1 second and increases
+     exponentially until reaching `backoff_max_seconds` seconds.  Defaults to `true`.
 
   * `:backoff_max_seconds` - Specify the max limit of seconds the backoff reconection attempt should take,
      defauls to 180 (3 mins).
+
+  * `:auto_reconnect_interval` - Specify the interval between connection attempts. Specifically, if an attempt
+     to establish a connection fails, either post-init or at some point during the life span of the client, the value
+     of this option shall determine how often to retry a reconnection. Defaults to 1000 milliseconds.
+     This option will only be used if `use_backoff` is set to `false`.
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
      `:infinity`. Defaults to `:infinity`.
@@ -560,8 +561,16 @@ defmodule MLLP.Client do
 
   defp maybe_set_default_options(opts) do
     socket_module = if opts.tls == [], do: TCP, else: TLS
-    backoff_seconds = opts[:backoff_max_seconds] || 180
-    backoff = if opts[:use_backoff], do: :backoff.init(1, backoff_seconds), else: nil
+
+    backoff =
+      case opts[:use_backoff] do
+        false ->
+          nil
+
+        _ ->
+          backoff_seconds = opts[:backoff_max_seconds] || 180
+          :backoff.init(1, backoff_seconds)
+      end
 
     send_opts = Map.take(opts, Map.keys(@default_send_opts))
 
