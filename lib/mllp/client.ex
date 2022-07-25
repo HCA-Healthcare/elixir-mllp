@@ -469,17 +469,18 @@ defmodule MLLP.Client do
     ensure_pending_reconnect_cancelled(state)
   end
 
-  defp ensure_pending_reconnect_cancelled(%{pending_reconnect: nil} = state), do: state
+  defp ensure_pending_reconnect_cancelled(%State{pending_reconnect: nil} = state), do: state
 
-  defp ensure_pending_reconnect_cancelled(%{backoff: nil} = state) do
-    :ok = Process.cancel_timer(state.pending_reconnect, info: false)
+  defp ensure_pending_reconnect_cancelled(%State{pending_reconnect: ref} = state) do
+    :ok = Process.cancel_timer(ref, info: false)
     %{state | pending_reconnect: nil}
   end
 
-  defp ensure_pending_reconnect_cancelled(%{backoff: backoff} = state) do
-    :ok = Process.cancel_timer(state.pending_reconnect, info: false)
+  defp backoff_succeed(%State{backoff: nil} = state), do: state
+
+  defp backoff_succeed(%State{backoff: backoff} = state) do
     {_, new_backoff} = :backoff.succeed(backoff)
-    %{state | pending_reconnect: nil, backoff: new_backoff}
+    %{state | backoff: new_backoff}
   end
 
   defp attempt_connection(%State{} = state) do
@@ -488,7 +489,11 @@ defmodule MLLP.Client do
 
     case state.tcp.connect(state.address, state.port, opts, 2000) do
       {:ok, socket} ->
-        state1 = ensure_pending_reconnect_cancelled(state)
+        state1 =
+          state
+          |> ensure_pending_reconnect_cancelled()
+          |> backoff_succeed()
+
         telemetry(:status, %{status: :connected}, state1)
         %{state1 | socket: socket, connect_failure: nil}
 
