@@ -73,9 +73,48 @@ defmodule ClientTest do
     end
   end
 
+  describe "uses backoff to handle connection" do
+    test "with base state" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+
+      expect(MLLP.TCPMock, :connect, fn ^address,
+                                        ^port,
+                                        [:binary, {:packet, 0}, {:active, false}],
+                                        2000 ->
+        {:ok, socket}
+      end)
+
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+
+      state = :sys.get_state(pid)
+
+      assert {:backoff, 1, 180, 1, :normal, _, _} = state.backoff
+    end
+
+    test "after connection failure" do
+      address = {127, 0, 0, 1}
+      port = 4090
+
+      expect(MLLP.TCPMock, :connect, fn ^address,
+                                        ^port,
+                                        [:binary, {:packet, 0}, {:active, false}],
+                                        2000 ->
+        {:error, "error"}
+      end)
+
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+
+      state = :sys.get_state(pid)
+
+      assert {:backoff, 1, 180, 2, :normal, _, _} = state.backoff
+    end
+  end
+
   describe "handle_info/2" do
     test "handles unexpected info messages" do
-      assert {:ok, pid} = MLLP.Client.start_link({127, 0, 0, 1}, 9998)
+      assert {:ok, pid} = MLLP.Client.start_link({127, 0, 0, 1}, 9998, use_backoff: true)
 
       assert capture_log(fn ->
                Kernel.send(pid, :eh?)
@@ -107,7 +146,7 @@ defmodule ClientTest do
       |> expect(:send, fn ^socket, ^packet -> :ok end)
       |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, tcp_reply} end)
 
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
       expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: "You win!"}
 
