@@ -1,6 +1,10 @@
 defmodule ClientAndReceiverIntegrationTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
+  import Mox
+  setup :verify_on_exit!
+  setup :set_mox_global
+
   alias MLLP.Client.Error
   @moduletag capture_log: true
 
@@ -397,7 +401,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(
           port: ctx.port,
-          dispatcher: MLLP.EchoDispatcher,
+          dispatcher: ctx[:dispatcher] || MLLP.EchoDispatcher,
           transport_opts: transport_opts,
           allowed_clients: allowed_clients
         )
@@ -487,6 +491,24 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag port: 8168
     @tag allowed_clients: ["client-x", "client-1"]
     test "accept peer cert from multiple allowed clients", ctx do
+      make_call_and_assert_success(ctx, ctx.ack)
+    end
+
+    @tag port: 8169, dispatcher: MLLP.DispatcherMock
+    @tag allowed_clients: ["client-1"]
+    test "returns client info in receiver context", ctx do
+      ack =
+        "MSH|^~\\&|||||20060529090131-0500||ACK^A01^ACK|01052901|P|2.5\rMSA|AA|01052901|A real MLLP message dispatcher was not provided\r"
+
+      MLLP.DispatcherMock
+      |> expect(:dispatch, fn :mllp_hl7,
+                              _msg,
+                              %{receiver_context: %{connection_info: connection_info}} = state ->
+        assert "client-1" == connection_info.peer_name
+
+        {:ok, %{state | reply_buffer: ack}}
+      end)
+
       make_call_and_assert_success(ctx, ctx.ack)
     end
 

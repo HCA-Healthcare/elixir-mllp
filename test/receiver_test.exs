@@ -102,7 +102,12 @@ defmodule ReceiverTest do
       MLLP.DispatcherMock
       |> expect(:dispatch, fn :mllp_hl7,
                               _,
-                              %FramingContext{receiver_context: %{foo: :bar}} = state ->
+                              %FramingContext{
+                                receiver_context: %{connection_info: connection_info, foo: :bar}
+                              } = state ->
+        assert {127, 0, 0, 1} == connection_info.peer_name
+        assert {{127, 0, 0, 1}, _} = connection_info.client_info
+        assert {{127, 0, 0, 1}, 8129} == connection_info.server_info
         {:ok, %{state | reply_buffer: "MSA|AA|01052901"}}
       end)
 
