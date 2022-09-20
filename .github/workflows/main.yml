@@ -9,16 +9,16 @@ on:
 
 env:
   MIX_ENV: test
-  otp-version: '24.1.7'
-  elixir-version: '1.12'
+  otp-version: '25.0.4'
+  elixir-version: '1.13'
   cache-version: '2'
 
 jobs:
   build:
     strategy:
       matrix:
-        otp: ['22.3.4.21', '23.3.4.7', '24.1.7']
-        elixir: ['1.10.4', '1.11.4', '1.12']
+        otp: ['23.3.4.7', '24.3.4.5', '25.0.4']
+        elixir: ['1.11.4', '1.12', '1.13']
     name: Build
     runs-on: ubuntu-latest
     steps:
@@ -74,8 +74,8 @@ jobs:
     needs: build
     strategy:
       matrix:
-        otp: ['22.3.4.21', '23.3.4.7', '24.1.7']
-        elixir: ['1.10.4', '1.11.4', '1.12']
+        otp: ['23.3.4.7', '24.3.4.5', '25.0.4']
+        elixir: ['1.11.4', '1.12', '1.13']
     name: Dialyzer
     runs-on: ubuntu-latest
     steps:
@@ -108,8 +108,8 @@ jobs:
     needs: build
     strategy:
       matrix:
-        otp: ['22.3.4.21', '23.3.4.7', '24.1.7']
-        elixir: ['1.10.4', '1.11.4', '1.12']
+        otp: ['23.3.4.7', '24.3.4.5', '25.0.4']
+        elixir: ['1.11.4', '1.12', '1.13']
     name: Test
     runs-on: ubuntu-latest
     steps:
