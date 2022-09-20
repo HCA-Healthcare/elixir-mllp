@@ -300,8 +300,18 @@ defmodule MLLP.Receiver do
     {:ok, client_info} = transport.peername(socket)
 
     case Peer.validate(%{transport: transport, socket: socket, client_info: client_info}, options) do
-      {:ok, :success} ->
+      {:ok, peer_name} ->
         :ok = transport.setopts(socket, active: :once)
+
+        connection_info = %{
+          peer_name: peer_name,
+          client_info: client_info,
+          server_info: server_info
+        }
+
+        receiver_context =
+          Map.get(options, :context, %{})
+          |> Map.put(:connection_info, connection_info)
 
         state = %{
           socket: socket,
@@ -309,7 +319,7 @@ defmodule MLLP.Receiver do
           client_info: client_info,
           transport: transport,
           framing_context: %FramingContext{
-            receiver_context: Map.get(options, :context, %{}),
+            receiver_context: receiver_context,
             packet_framer_module: Map.get(options, :packet_framer_module),
             dispatcher_module: Map.get(options, :dispatcher_module)
           }

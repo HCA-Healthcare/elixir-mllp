@@ -11,11 +11,9 @@ defmodule MLLP.Peer do
           :client_ip_not_allowed
           | :fail_to_verify_client_cert
 
-  @spec validate(t(), map()) :: {:ok, :success} | {:error, error_type()}
+  @type peer_name :: String.t() | :inet.ip_address()
 
-  def validate(_, %{allowed_clients: allowed_clients}) when allowed_clients == %{} do
-    {:ok, :success}
-  end
+  @spec validate(t(), map()) :: {:ok, peer_name()} | {:error, error_type()}
 
   def validate(peer, %{allowed_clients: allowed_clients, verify: :verify_peer}) do
     %{transport: transport, socket: socket} = peer
@@ -33,6 +31,10 @@ defmodule MLLP.Peer do
     verify_client_ip(client_info, allowed_clients)
   end
 
+  defp verify_host_name(cert, allowed_clients) when allowed_clients == %{} do
+    {:ok, get_common_name(cert)}
+  end
+
   defp verify_host_name(cert, allowed_clients) do
     reference_ids =
       Map.keys(allowed_clients)
@@ -44,7 +46,7 @@ defmodule MLLP.Peer do
          fqdn_fun: &fqdn_fun/1,
          match_fun: &match_fun/2
        ) do
-      {:ok, :success}
+      {:ok, get_common_name(cert)}
     else
       {:error, :fail_to_verify_client_cert}
     end
@@ -56,10 +58,24 @@ defmodule MLLP.Peer do
 
   defp fqdn_fun({:cn, value}), do: value
 
+  defp verify_client_ip({ip, _port}, allowed_clients) when allowed_clients == %{} do
+    {:ok, ip}
+  end
+
   defp verify_client_ip({ip, _port}, allowed_clients)
        when is_map_key(allowed_clients, ip) do
-    {:ok, :success}
+    {:ok, ip}
   end
 
   defp verify_client_ip(_, _), do: {:error, :client_ip_not_allowed}
+
+  defp get_common_name(cert) do
+    {_, {:rdnSequence, cert_attributes}} = :public_key.pkix_subject_id(cert)
+
+    cert_attributes
+    |> Enum.find_value(fn
+      [{:AttributeTypeAndValue, oid, {_, value}}] -> if oid == {2, 5, 4, 3}, do: value
+      _ -> nil
+    end)
+  end
 end
