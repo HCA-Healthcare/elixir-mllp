@@ -107,21 +107,22 @@ defmodule MLLP.Envelope do
 
   """
   @spec unwrap_message(binary()) :: binary() | no_return
-  def unwrap_message(<<11, _::binary>> = wrapped_message) do
-    if String.ends_with?(wrapped_message, @ending) do
-      unwrap(wrapped_message)
-    else
-      raise(ArgumentError, message: "MLLP Envelope cannot unwrap a partially wrapped message")
-    end
-  end
+  # def unwrap_message(<<11, _::binary>> = wrapped_message) do
+  #   if String.ends_with?(wrapped_message, @ending) do
+  #     unwrap(wrapped_message)
+  #   else
+  #     raise(ArgumentError, message: "MLLP Envelope cannot unwrap a partially wrapped message")
+  #   end
+  # end
 
   def unwrap_message(message) when is_binary(message) do
-    if String.ends_with?(message, @ending) do
-      raise(ArgumentError, message: "cannot unwrap a partially wrapped message")
-    else
-      Logger.debug("MLLP Envelope performed unnecessary unwrapping of unwrapped message")
-      message
-    end
+    # if String.ends_with?(message, @ending) do
+    #   raise(ArgumentError, message: "cannot unwrap a partially wrapped message")
+    # else
+    #   Logger.debug("MLLP Envelope performed unnecessary unwrapping of unwrapped message")
+    #   message
+    # end
+    unwrap(message)
   end
 
   @spec unwrap(binary()) :: binary()
