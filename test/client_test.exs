@@ -216,12 +216,44 @@ defmodule ClientTest do
   end
 
   describe "send/2" do
-    setup do
-      Logger.configure(level: :debug)
-      setup_client_receiver()
+    test "with valid HL7 returns an BAD AR that isn't formated correctly" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      message = HL7.Message.new(raw_hl7)
+      packet = MLLP.Envelope.wrap_message(raw_hl7)
+
+      tcp_reply =
+        "\vMSH|^~\\&|blockit||||20221026171353.229||ACK|01052901|P|2.3\rMSA|AR|01052901|System.Net.Internals.SocketExceptionFactory"
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:send, fn ^socket, ^packet -> :ok end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, tcp_reply} end)
+
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+
+      expected_ack = %MLLP.Ack{
+        acknowledgement_code: "AR",
+        text_message: "System.Net.Internals.SocketExceptionFactory"
+      }
+
+      assert(
+        {:error, :application_reject, expected_ack} ==
+          Client.send(client, message)
+      )
     end
 
-    test "with valid HL7 returns an AA", ctx do
+    test "with valid HL7 returns an AA" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
