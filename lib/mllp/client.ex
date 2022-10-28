@@ -464,13 +464,26 @@ defmodule MLLP.Client do
 
     case data.tcp.send(data.socket, payload) do
       :ok ->
-        next_state(
-          :receiving,
-          data
-          |> Map.put(:context, :recv)
-          |> Map.put(:caller, from),
-          send_action(send_type, from, options, data)
-        )
+        case recv_loop(state, options1) do
+          {:ok, reply} ->
+            telemetry(:received, %{response: reply}, state)
+            {:reply, {:ok, reply}, state}
+
+          {:error, reason} ->
+            telemetry(
+              :status,
+              %{
+                status: :disconnected,
+                error: format_error(reason),
+                context: "receive ACK failure"
+              },
+              state
+            )
+
+            new_state = maintain_reconnect_timer(state)
+            reply = {:error, new_error(:recv, reason)}
+            {:reply, reply, new_state}
+        end
 
       {:error, reason} ->
         telemetry(
@@ -918,4 +931,23 @@ defmodule MLLP.Client do
 
   defp normalize_address!(addr),
     do: raise(ArgumentError, "Invalid server ip address : #{inspect(addr)}")
+
+  defp recv_loop(state, timeout) do
+    case state.tcp.recv(state.socket, 0, timeout) do
+      {:ok, reply} ->
+        # XXX - we have this system, it sends two ack messages down the tcp socket.
+        # The first msg is missing our message and can be identified via the pending_ack string.
+        # The second msg is perfectly valid and should be the one used to verify our send
+        pending_ack = "MSA|AA|\r#{MLLP.Envelope.eb_cr()}"
+
+        if String.contains?(reply, pending_ack) do
+          recv_loop(state, 5000)
+        else
+          {:ok, reply}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end
