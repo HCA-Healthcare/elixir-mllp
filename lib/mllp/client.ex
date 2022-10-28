@@ -464,7 +464,7 @@ defmodule MLLP.Client do
 
     case data.tcp.send(data.socket, payload) do
       :ok ->
-        case recv_loop(state, options1) do
+        case recv_loop(state, options1.reply_timeout) do
           {:ok, reply} ->
             telemetry(:received, %{response: reply}, state)
             {:reply, {:ok, reply}, state}
