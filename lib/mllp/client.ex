@@ -379,7 +379,7 @@ defmodule MLLP.Client do
 
     case state.tcp.send(state.socket, payload) do
       :ok ->
-        case state.tcp.recv(state.socket, 0, options1.reply_timeout) do
+        case recv_loop(state, options1) do
           {:ok, reply} ->
             telemetry(:received, %{response: reply}, state)
             {:reply, {:ok, reply}, state}
@@ -627,4 +627,23 @@ defmodule MLLP.Client do
 
   defp normalize_address!(addr),
     do: raise(ArgumentError, "Invalid server ip address : #{inspect(addr)}")
+
+  defp recv_loop(state, timeout) do
+    case state.tcp.recv(state.socket, 0, timeout) do
+      {:ok, reply} ->
+        # XXX - we have this system, it sends two ack messages down the tcp socket.
+        # The first msg is missing our message and can be identified via the pending_ack string.
+        # The second msg is perfectly valid and should be the one used to verify our send
+        pending_ack = "MSA|AA|\r#{MLLP.Envelope.eb_cr()}"
+
+        if String.contains?(reply, pending_ack) do
+          recv_loop(state, 5000)
+        else
+          {:ok, reply}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end
