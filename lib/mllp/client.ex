@@ -689,22 +689,23 @@ defmodule MLLP.Client do
     {:ok, result}
   end
 
-  defp format_reply({:error, error}, context) do
-    {:error, new_error(context, error)}
+  def handle_info(unknown, state) do
+    Logger.warn("Unknown kernel message received => #{inspect(unknown)}")
+    {:noreply, state}
   end
 
-  defp handle_closed(data) do
-    handle_error(:closed, data)
+  @doc false
+  def terminate(:normal, state) do
+    stop_connection(state, :normal, "process terminated")
   end
 
-  ## Handle transport errors
-  defp handle_error(reason, data) do
-    Logger.error("Error: #{inspect(reason)}, data: #{inspect(data)}")
+  def terminate(reason, state) do
+    Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
+    stop_connection(state, reason, "process terminated")
+  end
 
-    {:error, new_error(get_context(data), reason)}
-    |> reply_to_caller(data)
-    |> stop_connection(reason)
-    |> tap(fn data ->
+  defp stop_connection(%State{} = state, error, context) do
+    if state.socket != nil do
       telemetry(
         :transport_error,
         %{error: reason},
