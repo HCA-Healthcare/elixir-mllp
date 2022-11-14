@@ -236,9 +236,9 @@ defmodule MLLP.Receiver do
     {transport_module, tls_options1, transport_opts1} =
       case Map.pop(transport_opts, :tls) do
         {nil, options1} ->
-          Logger.warning(
-            "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
-          )
+          # Logger.warn(
+          #   "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
+          # )
 
           {:ranch_tcp, [], options1}
 
