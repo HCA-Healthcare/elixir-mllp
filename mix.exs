@@ -34,7 +34,7 @@ defmodule MLLP.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:telemetry, "~> 0.4.3"},
+      {:telemetry, "~> 1.0"},
       {:ranch, "~> 1.8.0"},
       {:elixir_hl7, "~> 0.6.0"},
       {:backoff, "~> 1.1.6"},
