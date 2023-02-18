@@ -450,6 +450,11 @@ defmodule MLLP.Client do
   end
 
   @doc false
+  def terminate(reason = :normal, state) do
+    Logger.debug("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
+    stop_connection(state, reason, "process terminated")
+  end
+
   def terminate(reason, state) do
     Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
     stop_connection(state, reason, "process terminated")

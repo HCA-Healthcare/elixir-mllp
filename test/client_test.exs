@@ -277,6 +277,28 @@ defmodule ClientTest do
     end
   end
 
+  describe "terminate/2" do
+    test "logs debug message when reason is :normal" do
+      Logger.configure(level: :debug)
+      {:ok, pid} = Client.start_link({127,0,0,1}, 9999)
+      state = :sys.get_state(pid)
+
+      assert capture_log([level: :debug], fn ->
+        Client.terminate(:normal, state)
+      end) =~ "Client socket terminated. Reason: :normal"
+    end
+
+    test "logs error for any other reason" do
+      Logger.configure(level: :debug)
+      {:ok, pid} = Client.start_link({127,0,0,1}, 9999)
+      state = :sys.get_state(pid)
+
+      assert capture_log([level: :error], fn ->
+        Client.terminate(:shutdown, state)
+      end) =~ "Client socket terminated. Reason: :shutdown"
+    end
+  end
+
   defp telemetry_event(
          [:mllp, :client, event_name] = _full_event_name,
          measurements,
