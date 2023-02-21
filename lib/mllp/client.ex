@@ -353,7 +353,7 @@ defmodule MLLP.Client do
   end
 
   def handle_call(:reconnect, _from, state) do
-    new_state = 
+    new_state =
       state
       |> stop_connection(:timeout, "timeout message")
       |> attempt_connection()

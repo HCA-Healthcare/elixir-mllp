@@ -139,7 +139,8 @@ defmodule ClientAndReceiverIntegrationTest do
 
       assert MLLP.Client.is_connected?(client_pid) == false
 
-      {:ok, %{pid: receiver_pid}} = MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
@@ -158,12 +159,14 @@ defmodule ClientAndReceiverIntegrationTest do
     test "with reconnecting" do
       port = 8146
 
-      {:ok, client_pid} = MLLP.Client.start_link({127,0,0,1}, port)
+      {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
       assert MLLP.Client.is_connected?(client_pid) == false
 
-      {:ok, %{pid: receiver_pid}} = MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+
       assert Process.alive?(receiver_pid)
 
       assert MLLP.Client.is_connected?(client_pid) == false
@@ -171,7 +174,7 @@ defmodule ClientAndReceiverIntegrationTest do
       MLLP.Client.reconnect(client_pid)
       assert MLLP.Client.is_connected?(client_pid)
     end
- end
+  end
 
   describe "Sending and receiving" do
     test "without a listener listening" do
