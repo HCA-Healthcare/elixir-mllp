@@ -17,8 +17,8 @@ jobs:
   build:
     strategy:
       matrix:
-        otp: ['23.3.4.7', '24.3.4.1']
-        elixir: ['1.11.4', '1.12', '1.13']
+        otp: [24, 25]
+        elixir: ['1.12', '1.13', '1.14']
     name: Build
     runs-on: ubuntu-latest
     steps:
