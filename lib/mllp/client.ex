@@ -247,6 +247,18 @@ defmodule MLLP.Client do
   def is_connected?(pid), do: GenServer.call(pid, :is_connected)
 
   @doc """
+  Returns true if the connection is closed, otherwise false.
+  """
+  @spec is_closed?(pid :: pid()) :: boolean()
+  def is_closed?(pid), do: GenServer.call(pid, :is_closed)
+
+  @doc """
+  Returns true if the client is or will be attempting to reconnect, otherwise false.
+  """
+  @spec is_pending_reconnect?(pid :: pid()) :: boolean()
+  def is_pending_reconnect?(pid), do: GenServer.call(pid, :is_pending_reconnect)
+
+  @doc """
   Instructs the client to disconnect (if connected) and attempt a reconnect.
   """
   @spec reconnect(pid :: pid()) :: :ok
@@ -350,6 +362,23 @@ defmodule MLLP.Client do
 
   def handle_call(:is_connected, _reply, state) do
     {:reply, (state.socket && !state.pending_reconnect) == true, state}
+  end
+
+  def handle_call(:is_pending_reconnect, _reply, state) do
+    {:reply, state.pending_reconnect != nil, state}
+  end
+
+  def handle_call(:is_closed, _reply, state) do
+    {:reply, (state.socket == nil ||
+      case state.tcp.recv(state.socket, 0, 1) do
+        {:error, :closed} ->
+          true
+        {:error, :enotconn} ->
+          true
+        _ ->
+          false
+      end
+    ) == true, state}
   end
 
   def handle_call(:reconnect, _from, state) do
