@@ -519,7 +519,9 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag allowed_clients: ["client-1"]
     test "returns client info in receiver context", ctx do
       ack =
-        "MSH|^~\\&|||||20060529090131-0500||ACK^A01^ACK|01052901|P|2.5\rMSA|AA|01052901|A real MLLP message dispatcher was not provided\r"
+        MLLP.Envelope.wrap_message(
+          "MSH|^~\\&|||||20060529090131-0500||ACK^A01^ACK|01052901|P|2.5\rMSA|AA|01052901|A real MLLP message dispatcher was not provided\r"
+        )
 
       MLLP.DispatcherMock
       |> expect(:dispatch, fn :mllp_hl7,
@@ -574,6 +576,7 @@ defmodule ClientAndReceiverIntegrationTest do
           :application_accept
         )
         |> to_string()
+        |> MLLP.Envelope.wrap_message()
 
       {:ok, %{state | reply_buffer: reply}}
     end

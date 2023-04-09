@@ -178,6 +178,10 @@ defmodule MLLP.Client do
   def format_error(:timeout), do: "timed out"
   def format_error(:system_limit), do: "all available erlang emulator ports in use"
 
+  def format_error(:invalid_reply) do
+    "Invalid header received in server acknowledgment"
+  end
+
   def format_error(posix) when is_atom(posix) do
     case :inet.format_error(posix) do
       'unknown POSIX error' ->
@@ -328,6 +332,9 @@ defmodule MLLP.Client do
   @spec stop(pid :: pid()) :: :ok
   def stop(pid), do: GenServer.stop(pid)
 
+  @header MLLP.Envelope.sb()
+  @trailer MLLP.Envelope.eb_cr()
+
   ## GenServer callbacks
   @doc false
   @spec init(Keyword.t()) :: {:ok, MLLP.Client.t(), {:continue, :init_socket}}
@@ -383,9 +390,10 @@ defmodule MLLP.Client do
 
     case state.tcp.send(state.socket, payload) do
       :ok ->
-        case state.tcp.recv(state.socket, 0, options1.reply_timeout) do
+        timeout = maybe_convert_time(options1.reply_timeout, :millisecond, :microsecond)
+
+        case recv_ack(state, timeout) do
           {:ok, reply} ->
-            telemetry(:received, %{response: reply}, state)
             {:reply, {:ok, reply}, state}
 
           {:error, reason} ->
@@ -462,6 +470,67 @@ defmodule MLLP.Client do
   def terminate(reason, state) do
     Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
     stop_connection(state, reason, "process terminated")
+  end
+
+  defp maybe_convert_time(:infinity, _, _), do: :infinity
+
+  defp maybe_convert_time(t, from, to) do
+    System.convert_time_unit(t, from, to)
+  end
+
+  defp recv_ack(state, timeout) do
+    recv_ack(state, {timeout, 0}, <<>>)
+  end
+
+  defp recv_ack(_state, {time_left, time_owed}, _buffer)
+       when is_integer(time_left) and time_left <= time_owed do
+    {:error, :timeout}
+  end
+
+  defp recv_ack(state, {time_left, time_owed}, buffer) do
+    {res, elapsed} = do_recv(state, 0, time_left)
+
+    case res do
+      {:ok, reply} ->
+        new_buf = buffer <> reply
+        check = byte_size(new_buf) - 3
+
+        case new_buf do
+          <<@header, _ack::binary-size(check), @trailer>> ->
+            {:ok, new_buf}
+
+          <<@header, _rest::binary>> ->
+            time_credit = update_recv_time_credit(time_left, time_owed + elapsed)
+            recv_ack(state, time_credit, new_buf)
+
+          _ ->
+            {:error, :invalid_reply}
+        end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  defp do_recv(state, length, :infinity) do
+    res = state.tcp.recv(state.socket, length, :infinity)
+    {res, 0}
+  end
+
+  defp do_recv(state, length, timeout) do
+    timeout_in_ms = System.convert_time_unit(timeout, :microsecond, :millisecond)
+    t1 = System.monotonic_time(:microsecond)
+    res = state.tcp.recv(state.socket, length, timeout_in_ms)
+    t2 = System.monotonic_time(:microsecond)
+    {res, t2 - t1}
+  end
+
+  defp update_recv_time_credit(:infinity, _), do: {:infinity, 0}
+
+  defp update_recv_time_credit(time_left, time_spent) do
+    time_charged = div(time_spent, 1000) * 1000
+    time_owed = time_spent - time_charged
+    {time_left - time_charged, time_owed}
   end
 
   defp stop_connection(%State{} = state, error, context) do
