@@ -219,10 +219,11 @@ defmodule MLLP.Client do
      This option will only be used if `use_backoff` is set to `false`.
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
-     `:infinity`. Defaults to `:infinity`.
+     `:infinity`. Defaults to 60 seconds.
 
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`).
-     Note that `:binary`, `:packet`, and `:active` can not be overridden.
+     Note that `:binary`, `:packet`, and `:active` can not be overridden. Default options are enumerated below.
+      - send_timeout: Defaults to 60 seconds
 
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
@@ -271,19 +272,19 @@ defmodule MLLP.Client do
   ## Options
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
-     `:infinity`. Defaults to `:infinity`.
+     `:infinity`. Defaults to 60 seconds.
   """
   @spec send(
           pid :: pid,
           payload :: HL7.Message.t() | String.t() | binary(),
           options :: ClientContract.send_options(),
-          timeout :: non_neg_integer()
+          timeout :: non_neg_integer() | :infinity
         ) ::
           {:ok, String.t()}
           | MLLP.Ack.ack_verification_result()
           | {:error, ClientContract.client_error()}
 
-  def send(pid, payload, options \\ %{}, timeout \\ 5000)
+  def send(pid, payload, options \\ %{}, timeout \\ :infinity)
 
   def send(pid, %HL7.Message{} = payload, options, timeout) do
     raw_message = to_string(payload)
@@ -313,7 +314,7 @@ defmodule MLLP.Client do
   Given the synchronous nature of MLLP/HL7 this function is mainly useful for
   testing purposes.
   """
-  def send_async(pid, payload, timeout \\ 5000)
+  def send_async(pid, payload, timeout \\ :infinity)
 
   def send_async(pid, %HL7.Message{} = payload, timeout) do
     GenServer.call(pid, {:send_async, to_string(payload)}, timeout)
@@ -635,11 +636,11 @@ defmodule MLLP.Client do
   @default_opts %{
     telemetry_module: MLLP.DefaultTelemetry,
     tls_opts: [],
-    socket_opts: []
+    socket_opts: [send_timeout: 60_000]
   }
 
   @default_send_opts %{
-    reply_timeout: :infinity
+    reply_timeout: 60_000
   }
 
   defp maybe_set_default_options(opts) do
