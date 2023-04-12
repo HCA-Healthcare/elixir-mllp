@@ -43,6 +43,9 @@ defmodule ClientTest do
 
       assert MLLP.Client.format_error(:system_limit) ==
                "all available erlang emulator ports in use"
+
+      assert MLLP.Client.format_error(:invalid_reply) ==
+               "Invalid header received in server acknowledgment"
     end
 
     test "when given posix error" do
@@ -134,7 +137,9 @@ defmodule ClientTest do
       packet = MLLP.Envelope.wrap_message(raw_hl7)
 
       tcp_reply =
-        "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
+        MLLP.Envelope.wrap_message(
+          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
+        )
 
       MLLP.TCPMock
       |> expect(
@@ -152,6 +157,137 @@ defmodule ClientTest do
 
       assert(
         {:ok, :application_accept, expected_ack} ==
+          Client.send(client, message)
+      )
+    end
+
+    test "when replies are fragmented" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      message = HL7.Message.new(raw_hl7)
+      packet = MLLP.Envelope.wrap_message(raw_hl7)
+
+      tcp_reply1 =
+        MLLP.Envelope.wrap_message(
+          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
+        )
+
+      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:send, fn ^socket, ^packet -> :ok end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag1} end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag2} end)
+
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+
+      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: "You win!"}
+
+      assert(
+        {:ok, :application_accept, expected_ack} ==
+          Client.send(client, message)
+      )
+
+      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
+
+      {ack_frag2, ack_frag3} = String.split_at(ack_frag2, 10)
+
+      MLLP.TCPMock
+      |> expect(:send, fn ^socket, ^packet -> :ok end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag1} end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag2} end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag3} end)
+
+      assert(
+        {:ok, :application_accept, expected_ack} ==
+          Client.send(client, message)
+      )
+    end
+
+    test "when replies are fragmented and the last fragment is not received" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      message = HL7.Message.new(raw_hl7)
+      packet = MLLP.Envelope.wrap_message(raw_hl7)
+
+      tcp_reply1 =
+        MLLP.Envelope.wrap_message(
+          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
+        )
+
+      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
+
+      {ack_frag2, _ack_frag3} = String.split_at(ack_frag2, 10)
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:send, fn ^socket, ^packet -> :ok end)
+      |> expect(:recv, fn ^socket, 0, _ ->
+        Process.sleep(1)
+        {:ok, ack_frag1}
+      end)
+      |> expect(:recv, fn ^socket, 0, _ ->
+        Process.sleep(1)
+        {:ok, ack_frag2}
+      end)
+
+      {:ok, client} =
+        Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true, reply_timeout: 3)
+
+      expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
+
+      assert(
+        {:error, expected_err} ==
+          Client.send(client, message)
+      )
+    end
+
+    test "when reply header is invalid" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      message = HL7.Message.new(raw_hl7)
+      packet = MLLP.Envelope.wrap_message(raw_hl7)
+
+      tcp_reply1 =
+        "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:send, fn ^socket, ^packet -> :ok end)
+      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, tcp_reply1} end)
+
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+
+      expected_err = %MLLP.Client.Error{
+        context: :recv,
+        message: "Invalid header received in server acknowledgment",
+        reason: :invalid_reply
+      }
+
+      assert(
+        {:error, expected_err} ==
           Client.send(client, message)
       )
     end
