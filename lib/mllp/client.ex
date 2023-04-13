@@ -15,6 +15,7 @@ defmodule MLLP.ClientContract do
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
+          close_on_recv_error: boolean(),
           tls: [:ssl.tls_client_option()]
         ]
 
@@ -146,6 +147,7 @@ defmodule MLLP.Client do
           tcp: module() | nil,
           tls_opts: Keyword.t(),
           socket_opts: Keyword.t(),
+          close_on_recv_error: boolean(),
           backoff: any()
         }
 
@@ -163,6 +165,7 @@ defmodule MLLP.Client do
             send_opts: %{},
             tls_opts: [],
             socket_opts: [],
+            close_on_recv_error: true,
             backoff: nil
 
   alias __MODULE__, as: State
@@ -408,7 +411,11 @@ defmodule MLLP.Client do
               state
             )
 
-            new_state = maintain_reconnect_timer(state)
+            new_state =
+              state
+              |> maybe_close()
+              |> maintain_reconnect_timer()
+
             reply = {:error, new_error(:recv, reason)}
             {:reply, reply, new_state}
         end
@@ -478,6 +485,14 @@ defmodule MLLP.Client do
   defp maybe_convert_time(t, from, to) do
     System.convert_time_unit(t, from, to)
   end
+
+  defp maybe_close(%{close_on_recv_error: true} = state) do
+    state
+    |> stop_connection(:timeout, "recv error, closing connection to cleanup")
+    |> attempt_connection()
+  end
+
+  defp maybe_close(state), do: state
 
   defp recv_ack(state, timeout) do
     recv_ack(state, {timeout, 0}, <<>>)

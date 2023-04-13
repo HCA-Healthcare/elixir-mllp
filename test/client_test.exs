@@ -264,9 +264,15 @@ defmodule ClientTest do
         Process.sleep(1)
         {:ok, ack_frag2}
       end)
+      |> expect(:close, fn ^socket -> :ok end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, socket} end)
 
       {:ok, client} =
-        Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true, reply_timeout: 3)
+        Client.start_link(address, port,
+          tcp: MLLP.TCPMock,
+          use_backoff: true,
+          reply_timeout: 3
+        )
 
       expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
 
@@ -290,6 +296,7 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
+        2,
         fn ^address,
            ^port,
            [
@@ -304,6 +311,7 @@ defmodule ClientTest do
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
       |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, tcp_reply1} end)
+      |> expect(:close, fn ^socket -> :ok end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
