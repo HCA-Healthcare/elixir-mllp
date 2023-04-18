@@ -27,7 +27,7 @@ defmodule MLLP.ClientContract do
               pid :: pid,
               payload :: HL7.Message.t() | String.t(),
               options :: send_options(),
-              timeout :: non_neg_integer()
+              timeout :: non_neg_integer() | :infinity
             ) ::
               {:ok, String.t()}
               | MLLP.Ack.ack_verification_result()
@@ -36,7 +36,7 @@ defmodule MLLP.ClientContract do
   @callback send_async(
               pid :: pid,
               payload :: HL7.Message.t() | String.t(),
-              timeout :: non_neg_integer
+              timeout :: non_neg_integer | :infinity
             ) ::
               {:ok, :sent}
               | {:error, client_error()}
