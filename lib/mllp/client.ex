@@ -368,17 +368,12 @@ defmodule MLLP.Client do
     {:reply, state.pending_reconnect != nil, state}
   end
 
+  def handle_call(:is_closed, _reply, %State{socket: nil} = state) do
+    {:reply, true, state}
+  end
+
   def handle_call(:is_closed, _reply, state) do
-    {:reply, (state.socket == nil ||
-      case state.tcp.recv(state.socket, 0, 1) do
-        {:error, :closed} ->
-          true
-        {:error, :enotconn} ->
-          true
-        _ ->
-          false
-      end
-    ) == true, state}
+    {:reply, state.tcp.is_closed?(state.socket), state}
   end
 
   def handle_call(:reconnect, _from, state) do

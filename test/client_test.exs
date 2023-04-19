@@ -124,6 +124,44 @@ defmodule ClientTest do
     end
   end
 
+  describe "is_closed?/1" do
+    test "returns true if the connection is closed" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:is_closed?, fn _socket -> true end)
+
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+      assert MLLP.Client.is_closed?(client)
+    end
+
+    test "returns false if the connection is not closed" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+
+      MLLP.TCPMock
+      |> expect(
+        :connect,
+        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+          {:ok, socket}
+        end
+      )
+      |> expect(:is_closed?, fn _socket -> false end)
+
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
+      refute MLLP.Client.is_closed?(client)
+    end
+  end
+
   describe "send/2" do
     test "with valid HL7 returns an AA" do
       address = {127, 0, 0, 1}

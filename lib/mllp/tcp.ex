@@ -12,6 +12,8 @@ defmodule MLLP.TCPContract do
             ) :: {:ok, :gen_tcp.socket()} | {:error, any}
 
   @callback close(socket :: :gen_tcp.socket()) :: :ok
+
+  @callback is_closed?(socket :: :gen_tcp.socket()) :: boolean()
 end
 
 defmodule MLLP.TCP do
@@ -22,4 +24,27 @@ defmodule MLLP.TCP do
   defdelegate recv(socket, length, timeout), to: :gen_tcp
   defdelegate connect(address, port, options, timeout), to: :gen_tcp
   defdelegate close(socket), to: :gen_tcp
+
+  @doc """
+  Checks if the socket is closed.
+  It does so by attempting to read any data from the socket.
+
+  From the [`:gen_tcp` docs](https://www.erlang.org/doc/man/gen_tcp.html#recv-3):
+
+  > Argument Length is only meaningful when the socket is
+    in raw mode and denotes the number of bytes to read.
+    If Length is 0, all available bytes are returned.
+    If Length > 0, exactly Length bytes are returned,
+    or an error; possibly discarding less than Length
+    bytes of data when the socket is closed from the other
+    side.
+  """
+  @spec is_closed?(socket :: :gen_tcp.socket()) :: boolean()
+  def is_closed?(socket) do
+    case recv(socket, _length = 0, _timeout = 1) do
+      {:error, :closed} -> true
+      {:error, :enotconn} -> true
+      _ -> false
+    end
+  end
 end
