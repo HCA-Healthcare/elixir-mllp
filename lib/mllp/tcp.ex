@@ -25,6 +25,8 @@ defmodule MLLP.TCP do
   defdelegate connect(address, port, options, timeout), to: :gen_tcp
   defdelegate close(socket), to: :gen_tcp
 
+  require Logger
+
   @doc """
   Checks if the socket is closed.
   It does so by attempting to read any data from the socket.
@@ -42,8 +44,11 @@ defmodule MLLP.TCP do
   @spec is_closed?(socket :: :gen_tcp.socket()) :: boolean()
   def is_closed?(socket) do
     case recv(socket, _length = 0, _timeout = 1) do
-      {:error, reason} -> if reason == :timeout, do: false, else: true
-      _ -> false
+      {:ok, _} -> false
+      {:error, :timeout} -> false
+      {:error, reason} ->
+        Logger.warn("Socket appears to be closed. Reason: #{reason}")
+        true
     end
   end
 end
