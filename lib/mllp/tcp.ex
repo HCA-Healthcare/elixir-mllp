@@ -42,8 +42,7 @@ defmodule MLLP.TCP do
   @spec is_closed?(socket :: :gen_tcp.socket()) :: boolean()
   def is_closed?(socket) do
     case recv(socket, _length = 0, _timeout = 1) do
-      {:error, :closed} -> true
-      {:error, :enotconn} -> true
+      {:error, reason} -> if reason == :timeout, do: false, else: true
       _ -> false
     end
   end
