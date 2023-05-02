@@ -228,6 +228,12 @@ defmodule MLLP.Client do
      Note that `:binary`, `:packet`, and `:active` can not be overridden. Default options are enumerated below.
       - send_timeout: Defaults to 60 seconds
 
+  * `:close_on_recv_error` - A boolean value which dictates whether the the client socket will be
+     closed when an error in receiving a reply is encountered, this includes timeouts.
+     Setting this to `true` is usually the safest behaviour to avoid a "dead lock" situation between a
+     client and a server. This functions similarly to the `:send_timeout` option provided by
+    [`:gen_tcp`](`:gen_tcp`). Defaults to `true`.
+
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
      Additionally, further hardening can be achieved through other ssl options such as enabling
