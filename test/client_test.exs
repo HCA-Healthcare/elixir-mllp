@@ -84,7 +84,12 @@ defmodule ClientTest do
 
       expect(MLLP.TCPMock, :connect, fn ^address,
                                         ^port,
-                                        [:binary, {:packet, 0}, {:active, false}],
+                                        [
+                                          :binary,
+                                          {:packet, 0},
+                                          {:active, false},
+                                          {:send_timeout, 60_000}
+                                        ],
                                         2000 ->
         {:ok, socket}
       end)
@@ -102,7 +107,12 @@ defmodule ClientTest do
 
       expect(MLLP.TCPMock, :connect, fn ^address,
                                         ^port,
-                                        [:binary, {:packet, 0}, {:active, false}],
+                                        [
+                                          :binary,
+                                          {:packet, 0},
+                                          {:active, false},
+                                          {:send_timeout, 60_000}
+                                        ],
                                         2000 ->
         {:error, "error"}
       end)
@@ -144,12 +154,15 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, tcp_reply} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, tcp_reply} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -179,13 +192,16 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag1} end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag2} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag1} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag2} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -202,9 +218,9 @@ defmodule ClientTest do
 
       MLLP.TCPMock
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag1} end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag2} end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, ack_frag3} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag1} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag2} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag3} end)
 
       assert(
         {:ok, :application_accept, expected_ack} ==
@@ -232,7 +248,10 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
@@ -245,9 +264,15 @@ defmodule ClientTest do
         Process.sleep(1)
         {:ok, ack_frag2}
       end)
+      |> expect(:close, fn ^socket -> :ok end)
+      |> expect(:connect, fn _, _, _, _ -> {:ok, socket} end)
 
       {:ok, client} =
-        Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true, reply_timeout: 3)
+        Client.start_link(address, port,
+          tcp: MLLP.TCPMock,
+          use_backoff: true,
+          reply_timeout: 3
+        )
 
       expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
 
@@ -271,12 +296,22 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        2,
+        fn ^address,
+           ^port,
+           [
+             :binary,
+             {:packet, 0},
+             {:active, false},
+             {:send_timeout, 60_000}
+           ],
+           2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, tcp_reply1} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, tcp_reply1} end)
+      |> expect(:close, fn ^socket -> :ok end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -303,12 +338,15 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, :infinity -> {:ok, MLLP.Envelope.wrap_message("NACK")} end)
+      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, MLLP.Envelope.wrap_message("NACK")} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
@@ -326,7 +364,10 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
@@ -356,7 +397,10 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
@@ -378,7 +422,10 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )
@@ -400,7 +447,10 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address, ^port, [:binary, {:packet, 0}, {:active, false}], 2000 ->
+        fn ^address,
+           ^port,
+           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           2000 ->
           {:ok, socket}
         end
       )

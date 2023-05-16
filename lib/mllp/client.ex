@@ -15,6 +15,7 @@ defmodule MLLP.ClientContract do
           reply_timeout: non_neg_integer() | :infinity,
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
+          close_on_recv_error: boolean(),
           tls: [:ssl.tls_client_option()]
         ]
 
@@ -26,7 +27,7 @@ defmodule MLLP.ClientContract do
               pid :: pid,
               payload :: HL7.Message.t() | String.t(),
               options :: send_options(),
-              timeout :: non_neg_integer()
+              timeout :: non_neg_integer() | :infinity
             ) ::
               {:ok, String.t()}
               | MLLP.Ack.ack_verification_result()
@@ -35,7 +36,7 @@ defmodule MLLP.ClientContract do
   @callback send_async(
               pid :: pid,
               payload :: HL7.Message.t() | String.t(),
-              timeout :: non_neg_integer
+              timeout :: non_neg_integer | :infinity
             ) ::
               {:ok, :sent}
               | {:error, client_error()}
@@ -146,6 +147,7 @@ defmodule MLLP.Client do
           tcp: module() | nil,
           tls_opts: Keyword.t(),
           socket_opts: Keyword.t(),
+          close_on_recv_error: boolean(),
           backoff: any()
         }
 
@@ -163,6 +165,7 @@ defmodule MLLP.Client do
             send_opts: %{},
             tls_opts: [],
             socket_opts: [],
+            close_on_recv_error: true,
             backoff: nil
 
   alias __MODULE__, as: State
@@ -219,10 +222,17 @@ defmodule MLLP.Client do
      This option will only be used if `use_backoff` is set to `false`.
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
-     `:infinity`. Defaults to `:infinity`.
+     `:infinity`. Defaults to 60 seconds.
 
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`).
-     Note that `:binary`, `:packet`, and `:active` can not be overridden.
+     Note that `:binary`, `:packet`, and `:active` can not be overridden. Default options are enumerated below.
+      - send_timeout: Defaults to 60 seconds
+
+  * `:close_on_recv_error` - A boolean value which dictates whether the client socket will be
+     closed when an error in receiving a reply is encountered, this includes timeouts.
+     Setting this to `true` is usually the safest behaviour to avoid a "dead lock" situation between a
+     client and a server. This functions similarly to the `:send_timeout` option provided by
+    [`:gen_tcp`](`:gen_tcp`). Defaults to `true`.
 
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
@@ -271,19 +281,19 @@ defmodule MLLP.Client do
   ## Options
 
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
-     `:infinity`. Defaults to `:infinity`.
+     `:infinity`. Defaults to 60 seconds.
   """
   @spec send(
           pid :: pid,
           payload :: HL7.Message.t() | String.t() | binary(),
           options :: ClientContract.send_options(),
-          timeout :: non_neg_integer()
+          timeout :: non_neg_integer() | :infinity
         ) ::
           {:ok, String.t()}
           | MLLP.Ack.ack_verification_result()
           | {:error, ClientContract.client_error()}
 
-  def send(pid, payload, options \\ %{}, timeout \\ 5000)
+  def send(pid, payload, options \\ %{}, timeout \\ :infinity)
 
   def send(pid, %HL7.Message{} = payload, options, timeout) do
     raw_message = to_string(payload)
@@ -313,7 +323,7 @@ defmodule MLLP.Client do
   Given the synchronous nature of MLLP/HL7 this function is mainly useful for
   testing purposes.
   """
-  def send_async(pid, payload, timeout \\ 5000)
+  def send_async(pid, payload, timeout \\ :infinity)
 
   def send_async(pid, %HL7.Message{} = payload, timeout) do
     GenServer.call(pid, {:send_async, to_string(payload)}, timeout)
@@ -407,7 +417,11 @@ defmodule MLLP.Client do
               state
             )
 
-            new_state = maintain_reconnect_timer(state)
+            new_state =
+              state
+              |> maybe_close()
+              |> maintain_reconnect_timer()
+
             reply = {:error, new_error(:recv, reason)}
             {:reply, reply, new_state}
         end
@@ -477,6 +491,14 @@ defmodule MLLP.Client do
   defp maybe_convert_time(t, from, to) do
     System.convert_time_unit(t, from, to)
   end
+
+  defp maybe_close(%{close_on_recv_error: true} = state) do
+    state
+    |> stop_connection(:timeout, "recv error, closing connection to cleanup")
+    |> attempt_connection()
+  end
+
+  defp maybe_close(state), do: state
 
   defp recv_ack(state, timeout) do
     recv_ack(state, {timeout, 0}, <<>>)
@@ -635,11 +657,11 @@ defmodule MLLP.Client do
   @default_opts %{
     telemetry_module: MLLP.DefaultTelemetry,
     tls_opts: [],
-    socket_opts: []
+    socket_opts: [send_timeout: 60_000]
   }
 
   @default_send_opts %{
-    reply_timeout: :infinity
+    reply_timeout: 60_000
   }
 
   defp maybe_set_default_options(opts) do
