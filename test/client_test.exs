@@ -76,6 +76,66 @@ defmodule ClientTest do
     end
   end
 
+  describe "socket_opts" do
+    test "with default options" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+
+      expect(MLLP.TCPMock, :connect, fn ^address, ^port, opts, 2000 ->
+        # Assert we received the default options
+        assert opts[:send_timeout] == 60_000
+        {:ok, socket}
+      end)
+
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock)
+      state = :sys.get_state(pid)
+
+      # Assert we have the correct socket_opts in the state
+      assert state.socket_opts == [send_timeout: 60_000]
+    end
+
+    test "with default options overridden" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      socket_opts = [send_timeout: 10_000]
+
+      expect(MLLP.TCPMock, :connect, fn ^address, ^port, opts, 2000 ->
+        # Assert we received the default options
+        assert opts[:send_timeout] == 10_000
+        {:ok, socket}
+      end)
+
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, socket_opts: socket_opts)
+      state = :sys.get_state(pid)
+
+      # Assert we have the correct socket_opts in the state
+      assert state.socket_opts == [send_timeout: 10_000]
+    end
+
+    test "with additional options" do
+      address = {127, 0, 0, 1}
+      port = 4090
+      socket = make_ref()
+      socket_opts = [keepalive: true]
+
+      expect(MLLP.TCPMock, :connect, fn ^address, ^port, opts, 2000 ->
+        # Assert we received the default options
+        assert opts[:send_timeout] == 60_000
+        assert opts[:keepalive] == true
+        {:ok, socket}
+      end)
+
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, socket_opts: socket_opts)
+      state = :sys.get_state(pid)
+
+      # Assert we have the correct socket_opts in the state
+      assert state.socket_opts[:send_timeout] == 60_000
+      assert state.socket_opts[:keepalive] == true
+    end
+  end
+
   describe "uses backoff to handle connection" do
     test "with base state" do
       address = {127, 0, 0, 1}
