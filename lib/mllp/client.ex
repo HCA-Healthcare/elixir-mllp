@@ -681,12 +681,15 @@ defmodule MLLP.Client do
 
     send_opts = Map.merge(@default_send_opts, send_opts)
 
+    socket_opts = Keyword.merge(@default_opts[:socket_opts], opts[:socket_opts] || [])
+
     opts
     |> Map.merge(@default_opts)
     |> Map.put_new(:tcp, socket_module)
     |> Map.put(:pid, self())
     |> Map.put(:tls_opts, opts.tls)
     |> Map.put(:send_opts, send_opts)
+    |> Map.put(:socket_opts, socket_opts)
     |> Map.put(:backoff, backoff)
   end
 
