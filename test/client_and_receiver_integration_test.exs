@@ -188,10 +188,7 @@ defmodule ClientAndReceiverIntegrationTest do
       MLLP.Receiver.stop(port)
 
       refute MLLP.Client.is_connected?(client_pid)
-
     end
-
-
   end
 
   describe "Sending and receiving" do
