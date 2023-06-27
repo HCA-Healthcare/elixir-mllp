@@ -108,10 +108,10 @@ defmodule ClientAndReceiverIntegrationTest do
       assert MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
     end
 
     test "without a listener" do
@@ -120,10 +120,10 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
@@ -137,23 +137,23 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       MLLP.Client.reconnect(client_pid)
       assert MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
     end
 
     test "with reconnecting" do
@@ -162,18 +162,36 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       MLLP.Client.reconnect(client_pid)
       assert MLLP.Client.is_connected?(client_pid)
     end
+
+    test "detection of disconnected receiver" do
+      port = 8147
+
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+
+      {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
+
+      assert MLLP.Client.is_connected?(client_pid)
+
+      MLLP.Receiver.stop(port)
+
+      refute MLLP.Client.is_connected?(client_pid)
+
+    end
+
+
   end
 
   describe "Sending and receiving" do
@@ -189,7 +207,7 @@ defmodule ClientAndReceiverIntegrationTest do
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, payload)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
     end
 
     test "with a receiver that stops before the send" do
@@ -203,7 +221,7 @@ defmodule ClientAndReceiverIntegrationTest do
       assert MLLP.Client.is_connected?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
 
       assert match?(
                {:error, %Error{context: _, message: "connection closed"}},
