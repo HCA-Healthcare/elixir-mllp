@@ -26,7 +26,7 @@ defmodule ClientAndReceiverIntegrationTest do
     [ack: ack, port: port, transport_opts: transport_opts, allowed_clients: allowed_clients]
   end
 
-  describe "Supervsion" do
+  describe "Supervision" do
     test "successfully starts up under a supervisor using a child spec" do
       port = 8999
       transport_opts = %{num_acceptors: 1, max_connections: 1, socket_opts: [delay_send: true]}
@@ -185,7 +185,9 @@ defmodule ClientAndReceiverIntegrationTest do
 
       assert MLLP.Client.is_connected?(client_pid)
 
+      # Process.exit(receiver_pid, :kill)
       MLLP.Receiver.stop(port)
+      :timer.sleep(10)
 
       refute MLLP.Client.is_connected?(client_pid)
     end

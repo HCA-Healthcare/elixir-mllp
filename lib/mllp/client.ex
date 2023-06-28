@@ -55,10 +55,10 @@ defmodule MLLP.Client do
   Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address
   on the provided port. If a connection can not be immediately established, the client will keep
   trying to establish a connection per the value of `:auto_reconnect_interval` which defaults to
-  1 second. Therefor it is possible that before a connection is fully established, the caller
+  1 second. Therefore it is possible that before a connection is fully established, the caller
   may attempt to send a message which will result in `MLLP.Client.Error.t()` being returned containing
   the last error encountered in trying to establish a connection. Additionally, said behavour could be encountered
-  at any point during life span of an MLLP.Client process if the connection becomees severed on either side.
+  at any point during life span of an MLLP.Client process if the connection becomes severed on either side.
 
   All connections, send, and receive failures will be logged as errors.
 
@@ -236,7 +236,7 @@ defmodule MLLP.Client do
      client and a server. This functions similarly to the `:send_timeout` option provided by
     [`:gen_tcp`](`:gen_tcp`). Defaults to `true`.
 
-  * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
+  * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommendeded you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
      Additionally, further hardening can be achieved through other ssl options such as enabling
      certificate revocation via the `:crl_check` and `:crl_cache` options and customization of
@@ -363,8 +363,7 @@ defmodule MLLP.Client do
 
   @doc false
   def handle_continue(:init_socket, state) do
-    state1 = attempt_connection(state)
-    {:noreply, state1}
+    {:noreply, attempt_connection(state)}
   end
 
   def handle_call(:is_connected, _reply, state) do
@@ -401,10 +400,7 @@ defmodule MLLP.Client do
 
     case state.tcp.send(state.socket, payload) do
       :ok ->
-        state
-        |> Map.put(:caller, from)
-        |> Map.put(:receive_buffer, <<>>)
-        |> receive_response(options)
+        {:noreply, Map.put(state, :caller, from)}
 
       {:error, reason} ->
         telemetry(
@@ -472,34 +468,52 @@ defmodule MLLP.Client do
   end
 
   ## Handle the (fragmented) responses to `send` request from a caller
-  defp handle_received(reply, %{receive_buffer: buffer, caller: caller} = state) do
+
+  defp handle_received(_reply, %{caller: nil} = state) do
+    ## No caller, ignore
+    state
+  end
+
+  defp handle_received(reply, %{receive_buffer: buffer} = state) do
     new_buf = (buffer && buffer <> reply) || reply
     check = byte_size(new_buf) - 3
 
     case new_buf do
       <<@header, _ack::binary-size(check), @trailer>> ->
         ## The response is completed, send back to caller
-        GenServer.reply(caller, {:ok, new_buf})
-        Map.drop(state, [:caller, :receive_buffer])
+        reply_to_caller({:ok, new_buf}, state)
 
       <<@header, _rest::binary>> ->
         Map.put(state, :receive_buffer, new_buf)
 
       _ ->
-        {:error, :invalid_reply}
+        reply_to_caller({:error, :invalid_reply}, state)
     end
   end
 
-  ## Handle receiver connection closed
-  defp handle_closed(state) do
-    :todo
+  defp reply_to_caller(reply, %{caller: caller} = state) do
+    caller && GenServer.reply(caller, reply)
+
     state
+    |> Map.put(:caller, nil)
+    |> Map.put(:receive_buffer, nil)
+  end
+
+  defp handle_closed(state) do
+    handle_error(:closed, state)
   end
 
   ## Handle transport errors
   defp handle_error(reason, state) do
-    :todo
-    state
+    reply_to_caller({:error, new_error(get_context(state), reason)}, state)
+    |> stop_connection(reason, "closing connection to cleanup")
+    |> tap(fn state ->
+      telemetry(
+        :status,
+        %{status: :disconnected, error: format_error(reason), context: "send message failure"},
+        state
+      )
+    end)
   end
 
   @doc false
@@ -626,7 +640,9 @@ defmodule MLLP.Client do
       state.tcp.close(state.socket)
     end
 
-    ensure_pending_reconnect_cancelled(state)
+    state
+    |> Map.put(:socket, nil)
+    |> ensure_pending_reconnect_cancelled()
   end
 
   defp ensure_pending_reconnect_cancelled(%State{pending_reconnect: nil} = state), do: state
@@ -645,10 +661,11 @@ defmodule MLLP.Client do
 
   defp attempt_connection(%State{} = state) do
     telemetry(:status, %{status: :connecting}, state)
-    opts = [:binary, {:packet, 0}, {:active, false}] ++ state.socket_opts ++ state.tls_opts
+    opts = [:binary, {:packet, 0}, {:active, :once}] ++ state.socket_opts ++ state.tls_opts
 
     case state.tcp.connect(state.address, state.port, opts, 2000) do
       {:ok, socket} ->
+        # :inet.setopts(socket, [{:active, :once}])
         state1 =
           state
           |> ensure_pending_reconnect_cancelled()
@@ -775,6 +792,14 @@ defmodule MLLP.Client do
       context: context,
       message: format_error(error)
     }
+  end
+
+  defp get_context(%State{caller: caller}) when not is_nil(caller) do
+    :recv
+  end
+
+  defp get_context(_state) do
+    :unknown
   end
 
   defp normalize_address!({_, _, _, _} = addr), do: addr

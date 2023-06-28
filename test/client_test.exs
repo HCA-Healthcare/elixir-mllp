@@ -147,7 +147,7 @@ defmodule ClientTest do
                                         [
                                           :binary,
                                           {:packet, 0},
-                                          {:active, false},
+                                          {:active, :once},
                                           {:send_timeout, 60_000}
                                         ],
                                         2000 ->
@@ -170,7 +170,7 @@ defmodule ClientTest do
                                         [
                                           :binary,
                                           {:packet, 0},
-                                          {:active, false},
+                                          {:active, :once},
                                           {:send_timeout, 60_000}
                                         ],
                                         2000 ->
@@ -216,7 +216,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -254,7 +254,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -310,7 +310,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -362,7 +362,7 @@ defmodule ClientTest do
            [
              :binary,
              {:packet, 0},
-             {:active, false},
+             {:active, :once},
              {:send_timeout, 60_000}
            ],
            2000 ->
@@ -400,7 +400,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -426,7 +426,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -459,7 +459,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -484,7 +484,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -509,7 +509,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, false}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
