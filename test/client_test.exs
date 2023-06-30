@@ -147,7 +147,7 @@ defmodule ClientTest do
                                         [
                                           :binary,
                                           {:packet, 0},
-                                          {:active, :once},
+                                          {:active, true},
                                           {:send_timeout, 60_000}
                                         ],
                                         2000 ->
@@ -170,7 +170,7 @@ defmodule ClientTest do
                                         [
                                           :binary,
                                           {:packet, 0},
-                                          {:active, :once},
+                                          {:active, true},
                                           {:send_timeout, 60_000}
                                         ],
                                         2000 ->
@@ -254,7 +254,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -310,7 +310,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -362,7 +362,7 @@ defmodule ClientTest do
            [
              :binary,
              {:packet, 0},
-             {:active, :once},
+             {:active, true},
              {:send_timeout, 60_000}
            ],
            2000 ->
@@ -400,15 +400,17 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, MLLP.Envelope.wrap_message("NACK")} end)
+
+      # |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, MLLP.Envelope.wrap_message("NACK")} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
+      assert Client.is_connected?(client)
 
       assert {:ok, "NACK"} = Client.send(client, message)
     end
@@ -426,7 +428,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -459,7 +461,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -484,7 +486,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
@@ -509,7 +511,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, :once}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end

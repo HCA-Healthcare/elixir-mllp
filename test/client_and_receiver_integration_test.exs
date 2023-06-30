@@ -127,7 +127,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
-      exp_err = %Error{context: :connect, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :send, reason: :closed, message: "connection closed"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, "Eh?")
     end
 
