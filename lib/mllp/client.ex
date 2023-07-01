@@ -415,7 +415,7 @@ defmodule MLLP.Client do
           {:reply, reply, new_state}
       end
     else
-      {:reply, {:error, new_error(:send, :closed)}, state}
+      {:reply, {:error, new_error(:send, state.connect_failure)}, state}
     end
   end
 
@@ -466,8 +466,7 @@ defmodule MLLP.Client do
   end
 
   def handle_info(:reply_timeout, state) do
-    {:noreply,
-    reply_to_caller({:error, :timeout}, state)}
+    {:noreply, reply_to_caller({:error, :timeout}, state)}
   end
 
   def handle_info({transport, socket, data}, %{socket: socket} = state)

@@ -362,11 +362,6 @@ defmodule MLLP.Receiver do
     {:noreply, state}
   end
 
-  def terminate(reason, %{transport: transport_mod, socket: socket} = state) do
-    Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
-    transport_mod.close(socket)
-  end
-
   defp implements_behaviour?(mod, behaviour) do
     behaviours_found =
       Keyword.get_values(mod.__info__(:attributes), :behaviour)

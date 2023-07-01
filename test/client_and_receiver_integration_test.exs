@@ -127,7 +127,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
-      exp_err = %Error{context: :send, reason: :closed, message: "connection closed"}
+      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, "Eh?")
     end
 
@@ -178,14 +178,13 @@ defmodule ClientAndReceiverIntegrationTest do
     test "detection of disconnected receiver" do
       port = 8147
 
-      {:ok, %{pid: receiver_pid}} =
+      {:ok, %{pid: _receiver_pid}} =
         MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
       assert MLLP.Client.is_connected?(client_pid)
 
-      # Process.exit(receiver_pid, :kill)
       MLLP.Receiver.stop(port)
       :timer.sleep(10)
 
@@ -202,7 +201,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       payload = "A simple message"
 
-      exp_err = %Error{context: :connect, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, payload)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
@@ -349,7 +348,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
 
-      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :connect}} =
+      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :send}} =
                MLLP.Client.send(
                  client_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()

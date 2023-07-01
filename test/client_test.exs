@@ -216,7 +216,7 @@ defmodule ClientTest do
         :connect,
         fn ^address,
            ^port,
-           [:binary, {:packet, 0}, {:active, active}, {:send_timeout, 60_000}],
+           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
            2000 ->
           {:ok, socket}
         end
