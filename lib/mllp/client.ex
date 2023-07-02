@@ -484,7 +484,7 @@ defmodule MLLP.Client do
 
   def handle_info({transport_error, socket, reason}, %{socket: socket} = state)
       when transport_error in [:tcp_error, :ssl_error] do
-    {:noreply, handle_error(reason, state)}
+    {:noreply, handle_error(reason, maybe_close(reason, state))}
   end
 
   def handle_info(unknown, state) do
@@ -572,13 +572,13 @@ defmodule MLLP.Client do
     socket && !pending_reconnect
   end
 
-  defp maybe_close(%{close_on_recv_error: true} = state) do
+  defp maybe_close(reason, %{close_on_recv_error: true, context: context} = state) do
     state
-    |> stop_connection(:timeout, "recv error, closing connection to cleanup")
+    |> stop_connection(reason, context)
     |> attempt_connection()
   end
 
-  defp maybe_close(state), do: state
+  defp maybe_close(_reason, state), do: state
 
   defp stop_connection(%State{} = state, error, context) do
     if state.socket != nil do

@@ -222,7 +222,6 @@ defmodule ClientTest do
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, tcp_reply} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -260,8 +259,6 @@ defmodule ClientTest do
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag1} end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag2} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -278,9 +275,6 @@ defmodule ClientTest do
 
       MLLP.TCPMock
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag1} end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag2} end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, ack_frag3} end)
 
       assert(
         {:ok, :application_accept, expected_ack} ==
@@ -316,16 +310,6 @@ defmodule ClientTest do
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, _ ->
-        Process.sleep(1)
-        {:ok, ack_frag1}
-      end)
-      |> expect(:recv, fn ^socket, 0, _ ->
-        Process.sleep(1)
-        {:ok, ack_frag2}
-      end)
-      |> expect(:close, fn ^socket -> :ok end)
-      |> expect(:connect, fn _, _, _, _ -> {:ok, socket} end)
 
       {:ok, client} =
         Client.start_link(address, port,
@@ -370,8 +354,6 @@ defmodule ClientTest do
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-      |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, tcp_reply1} end)
-      |> expect(:close, fn ^socket -> :ok end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
@@ -406,8 +388,6 @@ defmodule ClientTest do
         end
       )
       |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      # |> expect(:recv, fn ^socket, 0, 60_000 -> {:ok, MLLP.Envelope.wrap_message("NACK")} end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
       assert Client.is_connected?(client)
