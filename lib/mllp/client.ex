@@ -151,7 +151,8 @@ defmodule MLLP.Client do
           backoff: any(),
           caller: pid() | nil,
           receive_buffer: binary() | nil,
-          reply_timer: reference()
+          reply_timer: reference(),
+          context: atom()
         }
 
   defstruct socket: nil,
@@ -172,7 +173,8 @@ defmodule MLLP.Client do
             backoff: nil,
             caller: nil,
             receive_buffer: nil,
-            reply_timer: nil
+            reply_timer: nil,
+            context: :connect
 
   alias __MODULE__, as: State
 
@@ -385,7 +387,6 @@ defmodule MLLP.Client do
 
   def handle_call({:send, message, options}, from, state) do
     telemetry(:sending, %{}, state)
-    Logger.error("--------------Sending....")
 
     if connected?(state) do
       payload = MLLP.Envelope.wrap_message(message)
@@ -396,6 +397,7 @@ defmodule MLLP.Client do
 
           {:noreply,
            state
+           |> Map.put(:context, :recv)
            |> Map.put(:caller, from)
            |> Map.put(:reply_timer, Process.send_after(self(), :reply_timeout, reply_timeout))}
 
@@ -425,7 +427,7 @@ defmodule MLLP.Client do
 
     case state.tcp.send(state.socket, payload) do
       :ok ->
-        {:reply, {:ok, :sent}, state}
+        {:reply, {:ok, :sent}, Map.put(state, :context, :recv)}
 
       {:error, reason} ->
         telemetry(
@@ -514,9 +516,17 @@ defmodule MLLP.Client do
     end
   end
 
-  defp reply_to_caller(reply, %{caller: caller} = state) do
-    caller && GenServer.reply(caller, reply)
+  defp reply_to_caller(reply, %{caller: caller, context: context} = state) do
+    caller && GenServer.reply(caller, format_reply(reply, context))
     reply_cleanup(state)
+  end
+
+  defp format_reply({:ok, result}, _context) do
+    {:ok, result}
+  end
+
+  defp format_reply({:error, error}, context) do
+    {:error, new_error(context, error)}
   end
 
   defp handle_closed(state) do
@@ -726,6 +736,10 @@ defmodule MLLP.Client do
     Ack.verify_ack_against_message(unwrapped_message, ack)
   end
 
+  defp new_error(context, %MLLP.Client.Error{} = error) do
+    Map.put(error, :context, context)
+  end
+
   defp new_error(context, error) do
     %MLLP.Client.Error{
       reason: error,
@@ -734,12 +748,8 @@ defmodule MLLP.Client do
     }
   end
 
-  defp get_context(%State{caller: caller}) when not is_nil(caller) do
-    :recv
-  end
-
-  defp get_context(_state) do
-    :unknown
+  defp get_context(%State{context: context}) do
+    (context && context) || :unknown
   end
 
   defp normalize_address!({_, _, _, _} = addr), do: addr
