@@ -646,7 +646,7 @@ defmodule MLLP.Client do
   defp maintain_reconnect_timer(%{backoff: nil} = state) do
     ref = Process.send_after(self(), :timeout, state.auto_reconnect_interval)
 
-    %State{state | pending_reconnect: ref}
+    %State{state | socket: nil, pending_reconnect: ref}
   end
 
   defp maintain_reconnect_timer(%{backoff: backoff} = state) do
@@ -658,7 +658,7 @@ defmodule MLLP.Client do
     ref = Process.send_after(self(), :timeout, seconds)
     {_, new_backoff} = :backoff.fail(backoff)
 
-    %State{state | pending_reconnect: ref, backoff: new_backoff}
+    %State{state | socket: nil, pending_reconnect: ref, backoff: new_backoff}
   end
 
   defp telemetry(_event_name, _measurements, %State{telemetry_module: nil} = _metadata) do
