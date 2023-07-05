@@ -10,6 +10,8 @@ defmodule ClientTest do
   setup :verify_on_exit!
   setup :set_mox_global
 
+  @default_port 4090
+
   setup do
     attach_telemetry()
     on_exit(fn -> detach_telemetry() end)
@@ -198,45 +200,29 @@ defmodule ClientTest do
   end
 
   describe "send/2" do
-    test "with valid HL7 returns an AA" do
+    setup do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = make_ref()
+      {:ok, _receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
+      on_exit(fn -> MLLP.Receiver.stop(port); Process.sleep(100); Process.exit(client, :kill) end)
+      %{client: client}
+    end
+
+    test "with valid HL7 returns an AA", ctx do
+
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
-      packet = MLLP.Envelope.wrap_message(raw_hl7)
-
-      tcp_reply =
-        MLLP.Envelope.wrap_message(
-          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
-        )
-
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
-
-      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: "You win!"}
+      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
 
       assert(
         {:ok, :application_accept, expected_ack} ==
-          Client.send(client, message)
+          Client.send(ctx.client, message, %{reply_timeout: 1000})
       )
+
     end
 
-    test "when replies are fragmented" do
-      address = {127, 0, 0, 1}
-      port = 4090
-      socket = make_ref()
+    test "when replies are fragmented", ctx do
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       packet = MLLP.Envelope.wrap_message(raw_hl7)
@@ -247,38 +233,21 @@ defmodule ClientTest do
         )
 
       {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
-
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
-
-      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: "You win!"}
+      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
 
       assert(
         {:ok, :application_accept, expected_ack} ==
-          Client.send(client, message)
+          Client.send(ctx.client, message)
       )
 
       {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
 
       {ack_frag2, ack_frag3} = String.split_at(ack_frag2, 10)
 
-      MLLP.TCPMock
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
 
       assert(
         {:ok, :application_accept, expected_ack} ==
-          Client.send(client, message)
+          Client.send(ctx.client, message)
       )
     end
 
@@ -326,10 +295,7 @@ defmodule ClientTest do
       )
     end
 
-    test "when reply header is invalid" do
-      address = {127, 0, 0, 1}
-      port = 4090
-      socket = make_ref()
+    test "when reply header is invalid", ctx do
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       packet = MLLP.Envelope.wrap_message(raw_hl7)
@@ -337,25 +303,6 @@ defmodule ClientTest do
       tcp_reply1 =
         "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
 
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        2,
-        fn ^address,
-           ^port,
-           [
-             :binary,
-             {:packet, 0},
-             {:active, true},
-             {:send_timeout, 60_000}
-           ],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
       expected_err = %MLLP.Client.Error{
         context: :recv,
@@ -365,7 +312,7 @@ defmodule ClientTest do
 
       assert(
         {:error, expected_err} ==
-          Client.send(client, message)
+          Client.send(ctx.client, tcp_reply1)
       )
     end
 
@@ -375,21 +322,8 @@ defmodule ClientTest do
 
       socket = make_ref()
       message = "Hello, it's me"
-      packet = MLLP.Envelope.wrap_message(message)
 
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
+      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
       assert Client.is_connected?(client)
 
       assert {:ok, "NACK"} = Client.send(client, message)
@@ -552,4 +486,31 @@ defmodule ClientTest do
   defp detach_telemetry() do
     :telemetry.detach("telemetry_events")
   end
+
+  defmodule TestDispatcher do
+    require Logger
+
+    @behaviour MLLP.Dispatcher
+
+    def dispatch(:mllp_hl7, <<"MSH|NOREPLY", _rest::binary>>, state) do
+      {:ok, %{state | reply_buffer: ""}}
+    end
+
+    def dispatch(:mllp_hl7, message, state) when is_binary(message) do
+      reply =
+        MLLP.Ack.get_ack_for_message(
+          message,
+          :application_accept
+        )
+        |> to_string()
+        |> MLLP.Envelope.wrap_message()
+
+      {:ok, %{state | reply_buffer: reply}}
+    end
+
+    def dispatch(non_hl7_type, message, state) do
+      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message("NACK")}}
+    end
+  end
+
 end
