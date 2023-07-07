@@ -91,7 +91,7 @@ defmodule ClientTest do
       end)
 
       {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock)
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       # Assert we have the correct socket_opts in the state
       assert state.socket_opts == [send_timeout: 60_000]
@@ -110,7 +110,7 @@ defmodule ClientTest do
       end)
 
       {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, socket_opts: socket_opts)
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       # Assert we have the correct socket_opts in the state
       assert state.socket_opts == [send_timeout: 10_000]
@@ -130,7 +130,7 @@ defmodule ClientTest do
       end)
 
       {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, socket_opts: socket_opts)
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       # Assert we have the correct socket_opts in the state
       assert state.socket_opts[:send_timeout] == 60_000
@@ -158,7 +158,7 @@ defmodule ClientTest do
 
       {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       assert {:backoff, 1, 180, 1, :normal, _, _} = state.backoff
     end
@@ -181,7 +181,7 @@ defmodule ClientTest do
 
       {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
 
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       assert {:backoff, 1, 180, 2, :normal, _, _} = state.backoff
     end
@@ -195,22 +195,16 @@ defmodule ClientTest do
                Kernel.send(pid, :eh?)
                Process.sleep(100)
                assert Process.alive?(pid)
-             end) =~ "Unknown kernel message received => :eh?"
+             end) =~ "Unknown message received => :eh?"
     end
   end
 
   describe "send/2" do
     setup do
-      address = {127, 0, 0, 1}
-      port = 4090
-      {:ok, _receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
-      on_exit(fn -> MLLP.Receiver.stop(port); Process.sleep(100); Process.exit(client, :kill) end)
-      %{client: client}
+      setup_client_receiver()
     end
 
     test "with valid HL7 returns an AA", ctx do
-
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
@@ -219,7 +213,6 @@ defmodule ClientTest do
         {:ok, :application_accept, expected_ack} ==
           Client.send(ctx.client, message, %{reply_timeout: 1000})
       )
-
     end
 
     test "when replies are fragmented", ctx do
@@ -243,7 +236,6 @@ defmodule ClientTest do
       {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
 
       {ack_frag2, ack_frag3} = String.split_at(ack_frag2, 10)
-
 
       assert(
         {:ok, :application_accept, expected_ack} ==
@@ -296,13 +288,9 @@ defmodule ClientTest do
     end
 
     test "when reply header is invalid", ctx do
-      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
-      message = HL7.Message.new(raw_hl7)
-      packet = MLLP.Envelope.wrap_message(raw_hl7)
-
-      tcp_reply1 =
-        "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
-
+      ## This HL7 message triggers :invalid_reply due to TestDispatcher implementation (note DONOTWRAP!)
+      message =
+        "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|DONOTWRAP|P|2.5\rMSA|AA|DONOTWRAP\r"
 
       expected_err = %MLLP.Client.Error{
         context: :recv,
@@ -312,7 +300,7 @@ defmodule ClientTest do
 
       assert(
         {:error, expected_err} ==
-          Client.send(ctx.client, tcp_reply1)
+          Client.send(ctx.client, message)
       )
     end
 
@@ -357,34 +345,18 @@ defmodule ClientTest do
   end
 
   describe "send_async/2" do
-    test "as a message" do
-      address = {127, 0, 0, 1}
-      port = 4090
-      socket = make_ref()
+    setup do
+      setup_client_receiver()
+    end
 
+    test "as a message", ctx do
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
 
       message =
         raw_hl7
         |> HL7.Message.new()
 
-      packet = MLLP.Envelope.wrap_message(raw_hl7)
-
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
-
-      assert({:ok, :sent} == Client.send_async(client, message))
+      assert({:ok, :sent} == Client.send_async(ctx.client, message))
     end
 
     test "when given non hl7" do
@@ -443,7 +415,7 @@ defmodule ClientTest do
     test "logs debug message when reason is :normal" do
       Logger.configure(level: :debug)
       {:ok, pid} = Client.start_link({127, 0, 0, 1}, 9999)
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       assert capture_log([level: :debug], fn ->
                Client.terminate(:normal, state)
@@ -453,12 +425,27 @@ defmodule ClientTest do
     test "logs error for any other reason" do
       Logger.configure(level: :debug)
       {:ok, pid} = Client.start_link({127, 0, 0, 1}, 9999)
-      state = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(pid)
 
       assert capture_log([level: :error], fn ->
                Client.terminate(:shutdown, state)
              end) =~ "Client socket terminated. Reason: :shutdown"
     end
+  end
+
+  defp setup_client_receiver() do
+    address = {127, 0, 0, 1}
+    port = 4090
+    {:ok, _receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
+    {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
+
+    on_exit(fn ->
+      MLLP.Receiver.stop(port)
+      Process.sleep(100)
+      Process.exit(client, :kill)
+    end)
+
+    %{client: client}
   end
 
   defp telemetry_event(
@@ -503,7 +490,7 @@ defmodule ClientTest do
           :application_accept
         )
         |> to_string()
-        |> MLLP.Envelope.wrap_message()
+        |> wrap_message()
 
       {:ok, %{state | reply_buffer: reply}}
     end
@@ -511,6 +498,13 @@ defmodule ClientTest do
     def dispatch(non_hl7_type, message, state) do
       {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message("NACK")}}
     end
-  end
 
+    defp wrap_message(message) do
+      if String.contains?(message, "DONOTWRAP") do
+        message
+      else
+        MLLP.Envelope.wrap_message(message)
+      end
+    end
+  end
 end
