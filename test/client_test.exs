@@ -279,11 +279,11 @@ defmodule ClientTest do
     end
 
     test "when given non hl7", ctx do
-      message = HL7.Examples.nist_immunization_hl7()
+      message = "NON HL7"
 
       assert Client.is_connected?(ctx.client)
 
-      assert {:ok, message} = Client.send(ctx.client, message)
+      assert {:ok, message} == Client.send(ctx.client, message)
     end
 
     test "when server closes connection on send" do
@@ -308,7 +308,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send}} =
+      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
                Client.send(client, message)
     end
   end
@@ -375,7 +375,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send}} =
+      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
                Client.send_async(client, message)
     end
   end
@@ -467,8 +467,8 @@ defmodule ClientTest do
       {:ok, %{state | reply_buffer: reply}}
     end
 
-    def dispatch(non_hl7_type, message, state) do
-      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message("NIST")}}
+    def dispatch(_non_hl7_type, message, state) do
+      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message(message)}}
     end
 
     defp wrap_message(message) do

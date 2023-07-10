@@ -463,7 +463,7 @@ defmodule MLLP.Client do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
-  def connected(:info, {transport, socket, data} = msg, %{socket: socket} = state)
+  def connected(:info, {transport, socket, _data} = msg, %{socket: socket} = state)
       when transport in [:tcp, :ssl] do
     receiving(:info, msg, state)
   end
