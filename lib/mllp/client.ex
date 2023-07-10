@@ -1,3 +1,47 @@
+defmodule MLLP.ClientContract do
+  @moduledoc """
+  MLLP.ClientContract provides the behavior implemented by MLLP.Client. It may be useful
+  for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/)
+  """
+  @type error_type :: :connect_failure | :send_error | :recv_error
+  @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
+
+  @type client_error :: MLLP.Client.Error.t()
+
+  @type options :: [
+          auto_reconnect_interval: non_neg_integer(),
+          use_backoff: boolean(),
+          backoff_max_seconds: integer(),
+          reply_timeout: non_neg_integer() | :infinity,
+          socket_opts: [:gen_tcp.option()],
+          telemetry_module: nil,
+          close_on_recv_error: boolean(),
+          tls: [:ssl.tls_client_option()]
+        ]
+
+  @type send_options :: %{
+          optional(:reply_timeout) => non_neg_integer() | :infinity
+        }
+
+  @callback send(
+              pid :: pid,
+              payload :: HL7.Message.t() | String.t(),
+              options :: send_options(),
+              timeout :: non_neg_integer() | :infinity
+            ) ::
+              {:ok, String.t()}
+              | MLLP.Ack.ack_verification_result()
+              | {:error, client_error()}
+
+  @callback send_async(
+              pid :: pid,
+              payload :: HL7.Message.t() | String.t(),
+              timeout :: non_neg_integer | :infinity
+            ) ::
+              {:ok, :sent}
+              | {:error, client_error()}
+end
+
 defmodule MLLP.Client do
   @moduledoc """
   MLLP.Client provides a simple tcp client for sending and receiving data
@@ -195,7 +239,7 @@ defmodule MLLP.Client do
      client and a server. This functions similarly to the `:send_timeout` option provided by
     [`:gen_tcp`](`:gen_tcp`). Defaults to `true`.
 
-  * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommendeded you
+  * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
      Additionally, further hardening can be achieved through other ssl options such as enabling
      certificate revocation via the `:crl_check` and `:crl_cache` options and customization of
@@ -369,7 +413,7 @@ defmodule MLLP.Client do
   end
 
   def disconnected(event, unknown, _state) do
-    unexpected_message(event, unknown)
+    unexpected_message(:disconnected, event, unknown)
   end
 
   #########################
@@ -381,7 +425,6 @@ defmodule MLLP.Client do
   end
 
   def connected(:enter, :receiving, _state) do
-    Logger.debug("Response received!")
     :keep_state_and_data
   end
 
@@ -420,13 +463,18 @@ defmodule MLLP.Client do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
+  def connected(:info, {transport, socket, data} = msg, %{socket: socket} = state)
+      when transport in [:tcp, :ssl] do
+    receiving(:info, msg, state)
+  end
+
   def connected(:info, {transport_closed, _socket}, state)
       when transport_closed in [:tcp_closed, :ssl_closed] do
     {:next_state, :disconnected, handle_closed(state)}
   end
 
   def connected(event, unknown, _state) do
-    unexpected_message(event, unknown)
+    unexpected_message(:connected, event, unknown)
   end
 
   defp reconnect_action(
@@ -472,7 +520,9 @@ defmodule MLLP.Client do
 
   def receiving(:info, {transport, socket, data}, %{socket: socket} = state)
       when transport in [:tcp, :ssl] do
-    {:next_state, :connected, handle_received(data, state)}
+    new_data = handle_received(data, state)
+    next_state = (new_data.caller && :receiving) || :connected
+    {:next_state, next_state, new_data}
   end
 
   def receiving(:info, {transport_closed, socket}, %{socket: socket} = state)
@@ -486,15 +536,18 @@ defmodule MLLP.Client do
   end
 
   def receiving(event, unknown, _state) do
-    unexpected_message(event, unknown)
+    unexpected_message(:receiving, event, unknown)
   end
 
   ########################################
   ### End of GenStateMachine callbacks ###
   ########################################
 
-  defp unexpected_message(event, message) do
-    Logger.warn("Unknown message received => #{inspect(message)}")
+  defp unexpected_message(state, event, message) do
+    Logger.warn(
+      "Event: #{inspect(event)} in state #{state}. Unknown message received => #{inspect(message)}"
+    )
+
     :keep_state_and_data
   end
 
@@ -512,9 +565,11 @@ defmodule MLLP.Client do
     case new_buf do
       <<@header, _ack::binary-size(check), @trailer>> ->
         ## The response is completed, send back to caller
+        Logger.debug("Client #{inspect(self())} received a full MLLP!")
         reply_to_caller({:ok, new_buf}, state)
 
       <<@header, _rest::binary>> ->
+        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
         Map.put(state, :receive_buffer, new_buf)
 
       _ ->

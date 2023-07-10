@@ -10,8 +10,6 @@ defmodule ClientTest do
   setup :verify_on_exit!
   setup :set_mox_global
 
-  @default_port 4090
-
   setup do
     attach_telemetry()
     on_exit(fn -> detach_telemetry() end)
@@ -201,6 +199,7 @@ defmodule ClientTest do
 
   describe "send/2" do
     setup do
+      Logger.configure(level: :debug)
       setup_client_receiver()
     end
 
@@ -216,75 +215,50 @@ defmodule ClientTest do
     end
 
     test "when replies are fragmented", ctx do
-      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      raw_hl7 = HL7.Examples.nist_immunization_hl7()
+
       message = HL7.Message.new(raw_hl7)
-      packet = MLLP.Envelope.wrap_message(raw_hl7)
 
-      tcp_reply1 =
-        MLLP.Envelope.wrap_message(
-          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
-        )
-
-      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
       expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
 
-      assert(
-        {:ok, :application_accept, expected_ack} ==
-          Client.send(ctx.client, message)
-      )
+      log =
+        capture_log([level: :debug], fn ->
+          {:ok, :application_accept, expected_ack} ==
+            Client.send(ctx.client, message)
+        end)
 
-      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
+      fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
+      ## One fragment...
+      assert count_occurences(log, fragment_log) == 1
+      ## ..before the MLLP is fully received
+      received_log = "Client #{inspect(ctx.client)} received a full MLLP!"
+      num_receives = count_occurences(log, received_log)
 
-      {ack_frag2, ack_frag3} = String.split_at(ack_frag2, 10)
-
-      assert(
-        {:ok, :application_accept, expected_ack} ==
-          Client.send(ctx.client, message)
-      )
+      assert num_receives == 1
     end
 
-    test "when replies are fragmented and the last fragment is not received" do
-      address = {127, 0, 0, 1}
-      port = 4090
-      socket = make_ref()
-      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
-      message = HL7.Message.new(raw_hl7)
-      packet = MLLP.Envelope.wrap_message(raw_hl7)
-
-      tcp_reply1 =
-        MLLP.Envelope.wrap_message(
-          "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|01052901|P|2.5\rMSA|AA|01052901|You win!\r"
-        )
-
-      {ack_frag1, ack_frag2} = String.split_at(tcp_reply1, 50)
-
-      {ack_frag2, _ack_frag3} = String.split_at(ack_frag2, 10)
-
-      MLLP.TCPMock
-      |> expect(
-        :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
-          {:ok, socket}
-        end
-      )
-      |> expect(:send, fn ^socket, ^packet -> :ok end)
-
-      {:ok, client} =
-        Client.start_link(address, port,
-          tcp: MLLP.TCPMock,
-          use_backoff: true,
-          reply_timeout: 3
-        )
+    test "when replies are fragmented and the last fragment is not received", ctx do
+      ## for this HL7 message, TestDispatcher implementation cuts the trailer (note NOTRAILER)
+      ## , which should result in the client timing out while waiting for the last fragment.
+      message =
+        "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|NOTRAILER|P|2.5\rMSA|AA|NOTRAILER\r"
 
       expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
 
-      assert(
-        {:error, expected_err} ==
-          Client.send(client, message)
-      )
+      log =
+        capture_log([level: :debug], fn ->
+          {:error, expected_err} ==
+            Client.send(ctx.client, message, %{reply_timeout: 1000})
+        end)
+
+      fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
+      ## One fragment...
+      assert count_occurences(log, fragment_log) == 1
+      ## ..before the MLLP is fully received
+      received_log = "Client #{inspect(ctx.client)} received a full MLLP!"
+      num_receives = count_occurences(log, received_log)
+
+      assert num_receives == 0
     end
 
     test "when reply header is invalid", ctx do
@@ -304,17 +278,12 @@ defmodule ClientTest do
       )
     end
 
-    test "when given non hl7" do
-      address = {127, 0, 0, 1}
-      port = 4090
+    test "when given non hl7", ctx do
+      message = HL7.Examples.nist_immunization_hl7()
 
-      socket = make_ref()
-      message = "Hello, it's me"
+      assert Client.is_connected?(ctx.client)
 
-      {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
-      assert Client.is_connected?(client)
-
-      assert {:ok, "NACK"} = Client.send(client, message)
+      assert {:ok, message} = Client.send(ctx.client, message)
     end
 
     test "when server closes connection on send" do
@@ -474,6 +443,10 @@ defmodule ClientTest do
     :telemetry.detach("telemetry_events")
   end
 
+  defp count_occurences(str, substr) do
+    str |> String.split(substr) |> length() |> Kernel.-(1)
+  end
+
   defmodule TestDispatcher do
     require Logger
 
@@ -485,18 +458,17 @@ defmodule ClientTest do
 
     def dispatch(:mllp_hl7, message, state) when is_binary(message) do
       reply =
-        MLLP.Ack.get_ack_for_message(
-          message,
-          :application_accept
-        )
+        message
+        |> MLLP.Ack.get_ack_for_message(:application_accept)
         |> to_string()
+        |> Kernel.<>(message)
         |> wrap_message()
 
       {:ok, %{state | reply_buffer: reply}}
     end
 
     def dispatch(non_hl7_type, message, state) do
-      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message("NACK")}}
+      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message("NIST")}}
     end
 
     defp wrap_message(message) do
@@ -504,6 +476,13 @@ defmodule ClientTest do
         message
       else
         MLLP.Envelope.wrap_message(message)
+        |> then(fn wrapped_message ->
+          if String.contains?(wrapped_message, "NOTRAILER") do
+            String.slice(wrapped_message, 0, String.length(message) - 1)
+          else
+            wrapped_message
+          end
+        end)
       end
     end
   end
