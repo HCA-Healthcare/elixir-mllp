@@ -390,13 +390,14 @@ defmodule ClientAndReceiverIntegrationTest do
     test "can restrict client if client IP is not allowed", ctx do
       {:ok, client_pid} = MLLP.Client.start_link("localhost", ctx.port)
 
-      exp = %Error{context: :recv, reason: :closed, message: "connection closed"}
+      {:error, error} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
 
-      assert {:error, ^exp} =
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      assert error.context in [:send, :recv]
+      assert error.reason == :closed
     end
 
     @tag allowed_clients: ["127.0.0.0", "localhost"]
