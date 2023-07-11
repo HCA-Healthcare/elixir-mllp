@@ -3,7 +3,7 @@ defmodule MLLP.ClientContract do
   MLLP.ClientContract provides the behavior implemented by MLLP.Client. It may be useful
   for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/)
   """
-  @type error_type :: :connect_failure | :send_error | :recv_error
+  @type error_type :: :tcp_error | :send_error | :recv_error
   @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
 
   @type client_error :: MLLP.Client.Error.t()
@@ -162,7 +162,7 @@ defmodule MLLP.Client do
             pid: nil,
             telemetry_module: nil,
             tcp: nil,
-            connect_failure: nil,
+            tcp_error: nil,
             host_string: nil,
             send_opts: %{},
             tls_opts: [],
@@ -404,7 +404,7 @@ defmodule MLLP.Client do
   end
 
   def disconnected({:call, from}, {:send, _message, _options}, state) do
-    actions = [{:reply, from, {:error, new_error(:send, state.connect_failure)}}]
+    actions = [{:reply, from, {:error, new_error(:send, state.tcp_error)}}]
     {:keep_state_and_data, actions}
   end
 
@@ -603,7 +603,7 @@ defmodule MLLP.Client do
     |> tap(fn state ->
       telemetry(
         :status,
-        %{status: :disconnected, error: format_error(reason), context: "send message failure"},
+        %{status: :disconnected, error: format_error(reason)},
         state
       )
     end)
@@ -645,6 +645,7 @@ defmodule MLLP.Client do
 
     state
     |> Map.put(:socket, nil)
+    |> Map.put(:tcp_error, error)
   end
 
   defp backoff_succeed(%State{backoff: nil} = state), do: state
@@ -665,7 +666,7 @@ defmodule MLLP.Client do
           |> backoff_succeed()
 
         telemetry(:status, %{status: :connected}, state1)
-        {:ok, %{state1 | socket: socket, connect_failure: nil}}
+        {:ok, %{state1 | socket: socket, tcp_error: nil}}
 
       {:error, reason} ->
         message = format_error(reason)
@@ -680,7 +681,7 @@ defmodule MLLP.Client do
         {:error,
          state
          |> maybe_update_reconnection_timeout()
-         |> Map.put(:connect_failure, reason)}
+         |> Map.put(:tcp_error, reason)}
     end
   end
 

@@ -221,10 +221,14 @@ defmodule ClientAndReceiverIntegrationTest do
       MLLP.Receiver.stop(port)
       refute Process.alive?(receiver_pid)
 
-      assert match?(
-               {:error, %Error{context: _, message: "connection closed"}},
-               MLLP.Client.send(client_pid, "Simple message")
-             )
+      {:error, %Error{context: context, message: message}} =
+        MLLP.Client.send(client_pid, "Simple message")
+
+      assert context in [:send, :recv]
+      assert message in [MLLP.Client.format_error(:closed), MLLP.Client.format_error(:einval)]
+
+      refute MLLP.Client.is_connected?(client_pid)
+
     end
 
     test "with a larger message" do
