@@ -516,7 +516,7 @@ defmodule MLLP.Client do
   end
 
   def receiving({:call, from}, {:send, _message, _options}, _state) do
-    {:keep_state_and_data, [{:reply, from, {:error, :busy_with_other_call}}]}
+    {:keep_state_and_data, [{:reply, from, format_reply({:error, :busy_with_other_call}, :send)}]}
   end
 
   def receiving(:state_timeout, :receive_timeout, state) do

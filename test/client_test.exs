@@ -311,6 +311,23 @@ defmodule ClientTest do
       assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
                Client.send(client, message)
     end
+
+    test "one send request at a time", ctx do
+      test_message = "test_one_send_at_a_time"
+
+      concurrent_requests =
+        Task.async_stream(1..2, fn _i -> Client.send(ctx.client, test_message) end)
+        |> Enum.map(fn {:ok, res} -> res end)
+
+      assert length(concurrent_requests) == 2
+
+      assert Enum.count(concurrent_requests, fn resp ->
+               case resp do
+                 {:ok, message} when message == test_message -> true
+                 {:error, %MLLP.Client.Error{reason: :busy_with_other_call}} -> false
+               end
+             end) == 1
+    end
   end
 
   describe "send_async/2" do
