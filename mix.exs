@@ -38,7 +38,6 @@ defmodule MLLP.MixProject do
       {:ranch, "~> 1.8.0"},
       {:elixir_hl7, "== 0.6.2"},
       {:backoff, "~> 1.1.6"},
-      {:gen_state_machine, "~> 3.0"},
       {:ex_doc, "~> 0.24.2", only: :dev, runtime: false},
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
       {:mix_test_watch, "~> 1.0.2", only: :dev, runtime: false},

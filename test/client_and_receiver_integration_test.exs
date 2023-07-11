@@ -228,7 +228,6 @@ defmodule ClientAndReceiverIntegrationTest do
       assert message in [MLLP.Client.format_error(:closed), MLLP.Client.format_error(:einval)]
 
       refute MLLP.Client.is_connected?(client_pid)
-
     end
 
     test "with a larger message" do

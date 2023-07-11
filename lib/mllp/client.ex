@@ -131,7 +131,7 @@ defmodule MLLP.Client do
 
   @behaviour MLLP.ClientContract
 
-  use GenStateMachine, callback_mode: [:state_functions, :state_enter]
+  @behaviour :gen_statem
 
   @type pid_ref :: atom | pid | {atom, any} | {:via, atom, any}
   @type ip_address :: :inet.socket_address() | String.t()
@@ -253,9 +253,10 @@ defmodule MLLP.Client do
         ) :: {:ok, pid()}
 
   def start_link(address, port, options \\ []) do
-    GenStateMachine.start_link(
+    :gen_statem.start_link(
       __MODULE__,
-      [address: normalize_address!(address), port: port] ++ options
+      [address: normalize_address!(address), port: port] ++ options,
+      []
     )
   end
 
@@ -263,13 +264,13 @@ defmodule MLLP.Client do
   Returns true if the connection is open and established, otherwise false.
   """
   @spec is_connected?(pid :: pid()) :: boolean()
-  def is_connected?(pid) when is_pid(pid), do: GenStateMachine.call(pid, :is_connected)
+  def is_connected?(pid) when is_pid(pid), do: :gen_statem.call(pid, :is_connected)
 
   @doc """
   Instructs the client to disconnect (if connected) and attempt a reconnect.
   """
   @spec reconnect(pid :: pid()) :: :ok
-  def reconnect(pid), do: GenStateMachine.call(pid, :reconnect)
+  def reconnect(pid), do: :gen_statem.call(pid, :reconnect)
 
   @doc """
   Sends a message and receives a response.
@@ -304,7 +305,7 @@ defmodule MLLP.Client do
   def send(pid, %HL7.Message{} = payload, options, timeout) do
     raw_message = to_string(payload)
 
-    case GenStateMachine.call(pid, {:send, raw_message, options}, timeout) do
+    case :gen_statem.call(pid, {:send, raw_message, options}, timeout) do
       {:ok, reply} ->
         verify_ack(reply, raw_message)
 
@@ -314,7 +315,7 @@ defmodule MLLP.Client do
   end
 
   def send(pid, payload, options, timeout) do
-    case GenStateMachine.call(pid, {:send, payload, options}, timeout) do
+    case :gen_statem.call(pid, {:send, payload, options}, timeout) do
       {:ok, wrapped_message} ->
         {:ok, MLLP.Envelope.unwrap_message(wrapped_message)}
 
@@ -337,22 +338,26 @@ defmodule MLLP.Client do
   end
 
   def send_async(pid, payload, timeout) when is_binary(payload) do
-    GenStateMachine.call(pid, {:send_async, payload, []}, timeout)
+    :gen_statem.call(pid, {:send_async, payload, []}, timeout)
   end
 
   @doc """
   Stops an MLLP.Client given a MLLP.Client pid.
 
-  This function will always return `:ok` per `GenStateMachine.stop/1`, thus
+  This function will always return `:ok` per `:gen_statem.stop/1`, thus
   you may give it a pid that references a client which is already stopped.
   """
   @spec stop(pid :: pid()) :: :ok
-  def stop(pid), do: GenStateMachine.stop(pid)
+  def stop(pid), do: :gen_statem.stop(pid)
 
   @header MLLP.Envelope.sb()
   @trailer MLLP.Envelope.eb_cr()
 
-  ## GenStateMachine callbacks
+  ## :gen_statem callbacks
+  @impl true
+  def callback_mode() do
+    [:state_functions, :state_enter]
+  end
 
   @impl true
   @spec init(Keyword.t()) ::
@@ -540,7 +545,7 @@ defmodule MLLP.Client do
   end
 
   ########################################
-  ### End of GenStateMachine callbacks ###
+  ### End of :gen_statem callbacks ###
   ########################################
 
   defp unexpected_message(state, event, message) do
@@ -578,7 +583,7 @@ defmodule MLLP.Client do
   end
 
   defp reply_to_caller(reply, %{caller: caller, context: context} = state) do
-    caller && GenStateMachine.reply(caller, format_reply(reply, context))
+    caller && :gen_statem.reply(caller, format_reply(reply, context))
     reply_cleanup(state)
   end
 
