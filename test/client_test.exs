@@ -514,7 +514,7 @@ defmodule ClientTest do
     end
 
     def dispatch(_non_hl7_type, message, state) do
-      {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message(message)}}
+      {:ok, %{state | reply_buffer: handle_message(message)}}
     end
 
     defp handle_message(message) do
