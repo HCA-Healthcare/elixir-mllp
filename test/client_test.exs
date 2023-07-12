@@ -481,7 +481,7 @@ defmodule ClientTest do
         |> MLLP.Ack.get_ack_for_message(:application_accept)
         |> to_string()
         |> Kernel.<>(message)
-        |> wrap_message()
+        |> handle_message()
 
       {:ok, %{state | reply_buffer: reply}}
     end
@@ -490,7 +490,9 @@ defmodule ClientTest do
       {:ok, %{state | reply_buffer: MLLP.Envelope.wrap_message(message)}}
     end
 
-    defp wrap_message(message) do
+    defp handle_message(message) do
+      ## Slow down the handling on receiver side
+      Process.sleep(10)
       if String.contains?(message, "DONOTWRAP") do
         message
       else
