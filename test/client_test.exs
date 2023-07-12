@@ -254,7 +254,7 @@ defmodule ClientTest do
       fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
       ## One fragment...
       assert count_occurences(log, fragment_log) == 1
-      ## ..before the MLLP is fully received
+      ## ..but the MLLP has not been fully received
       received_log = "Client #{inspect(ctx.client)} received a full MLLP!"
       num_receives = count_occurences(log, received_log)
 
