@@ -492,7 +492,7 @@ defmodule ClientTest do
 
     defp handle_message(message) do
       ## Slow down the handling on receiver side
-      Process.sleep(10)
+      Process.sleep(100)
 
       if String.contains?(message, "DONOTWRAP") do
         message
