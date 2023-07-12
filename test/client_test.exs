@@ -315,11 +315,13 @@ defmodule ClientTest do
     test "one send request at a time", ctx do
       test_message = "test_one_send_at_a_time"
 
+      num_requests = 4
+
       concurrent_requests =
-        Task.async_stream(1..2, fn _i -> Client.send(ctx.client, test_message) end)
+        Task.async_stream(1..num_requests, fn _i -> Client.send(ctx.client, test_message) end)
         |> Enum.map(fn {:ok, res} -> res end)
 
-      assert length(concurrent_requests) == 2
+      assert length(concurrent_requests) == num_requests
 
       assert Enum.count(concurrent_requests, fn resp ->
                case resp do

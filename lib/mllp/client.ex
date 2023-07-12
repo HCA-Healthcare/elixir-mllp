@@ -264,7 +264,7 @@ defmodule MLLP.Client do
   Returns true if the connection is open and established, otherwise false.
   """
   @spec is_connected?(pid :: pid()) :: boolean()
-  def is_connected?(pid) when is_pid(pid), do: :gen_statem.call(pid, :is_connected)
+  def is_connected?(pid), do: :gen_statem.call(pid, :is_connected)
 
   @doc """
   Instructs the client to disconnect (if connected) and attempt a reconnect.
@@ -353,7 +353,9 @@ defmodule MLLP.Client do
   @header MLLP.Envelope.sb()
   @trailer MLLP.Envelope.eb_cr()
 
+  ##
   ## :gen_statem callbacks
+  ##
   @impl true
   def callback_mode() do
     [:state_functions, :state_enter]
