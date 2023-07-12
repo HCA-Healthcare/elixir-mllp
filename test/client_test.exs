@@ -313,7 +313,7 @@ defmodule ClientTest do
     end
 
     test "one send request at a time", ctx do
-      test_message = "test_one_send_at_a_time"
+      test_message = "Test one send at a time (asking receiver to SLOWDOWN to prevent flakiness)"
 
       num_requests = 4
 
@@ -329,6 +329,33 @@ defmodule ClientTest do
                  {:error, %MLLP.Client.Error{reason: :busy_with_other_call}} -> false
                end
              end) == 1
+    end
+
+    test "responses to concurrent requests don't get mixed", ctx do
+      test_message = "test_concurrent_"
+
+      num_requests = 10
+
+      concurrent_requests =
+        Task.async_stream(1..num_requests, fn request_id ->
+          {request_id, Client.send(ctx.client, test_message <> "#{request_id}")}
+        end)
+        |> Enum.map(fn {:ok, res} -> res end)
+
+      ## All successful responses match the requests
+      assert Enum.all?(
+               concurrent_requests,
+               fn
+                 {request_id, {:ok, incoming}} ->
+                   incoming == test_message <> "#{request_id}"
+
+                 {_request_id, {:error, %MLLP.Client.Error{reason: :busy_with_other_call}}} ->
+                   true
+
+                 _unexpected ->
+                   false
+               end
+             )
     end
   end
 
@@ -491,8 +518,10 @@ defmodule ClientTest do
     end
 
     defp handle_message(message) do
-      ## Slow down the handling on receiver side
-      Process.sleep(100)
+      ## Slow down the handling on receiver side, if required
+      if String.contains?(message, "SLOWDOWN") do
+        Process.sleep(100)
+      end
 
       if String.contains?(message, "DONOTWRAP") do
         message
