@@ -605,7 +605,8 @@ defmodule MLLP.Client do
   defp handle_error(reason, state) do
     Logger.error("Error: #{inspect(reason)}, state: #{inspect(state)}")
 
-    reply_to_caller({:error, new_error(get_context(state), reason)}, state)
+    {:error, new_error(get_context(state), reason)}
+    |> reply_to_caller(state)
     |> stop_connection(reason, "closing connection to cleanup")
     |> tap(fn state ->
       telemetry(
