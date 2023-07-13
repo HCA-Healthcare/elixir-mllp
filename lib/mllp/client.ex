@@ -150,7 +150,7 @@ defmodule MLLP.Client do
           close_on_recv_error: boolean(),
           backoff: any(),
           caller: pid() | nil,
-          receive_buffer: binary(),
+          receive_buffer: iolist(),
           context: atom()
         }
 
@@ -170,7 +170,7 @@ defmodule MLLP.Client do
             close_on_recv_error: true,
             backoff: nil,
             caller: nil,
-            receive_buffer: "",
+            receive_buffer: [],
             context: :connect
 
   alias __MODULE__, as: State
@@ -566,23 +566,48 @@ defmodule MLLP.Client do
     data
   end
 
-  defp handle_received(reply, %{receive_buffer: buffer} = data) do
-    new_buf = buffer <> reply
-
-    case new_buf do
-      <<@header, rest::binary>> ->
-        if String.slice(rest, -@trailer_length, @trailer_length) == @trailer do
-          ## The response is completed, send back to caller
-          Logger.debug("Client #{inspect(self())} received a full MLLP!")
-          reply_to_caller({:ok, new_buf}, data)
-        else
-          Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
-          Map.put(data, :receive_buffer, new_buf)
-        end
-
-      _ ->
-        reply_to_caller({:error, :invalid_reply}, data)
+  defp handle_received(<<@header, rest::binary>> = reply, %{receive_buffer: []} = data) do
+    if has_trailer?(rest) do
+      reply_to_caller({:ok, reply}, data)
+    else
+      Map.put(data, :receive_buffer, update_receive_buffer([], reply))
     end
+  end
+
+  ## No header in the first packet
+  defp handle_received(_reply, %{receive_buffer: []} = data) do
+    reply_to_caller({:error, :invalid_reply}, data)
+  end
+
+  ## The rest of MLLP (after the header was received)
+  defp handle_received(reply, %{receive_buffer: buffer} = data) do
+    new_buf = update_receive_buffer(buffer, reply)
+
+    if has_trailer?(reply) do
+      reply_to_caller({:ok, buffer_to_binary(new_buf)}, data)
+    else
+      Map.put(data, :receive_buffer, new_buf)
+    end
+  end
+
+  defp has_trailer?(packet) do
+    (String.slice(packet, -@trailer_length, @trailer_length) == @trailer)
+    |> tap(fn yes ->
+      (yes && Logger.debug("Client #{inspect(self())} received a full MLLP!")) ||
+        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{packet}")
+    end)
+  end
+
+  defp update_receive_buffer(buffer, packet) do
+    [buffer | packet]
+  end
+
+  defp buffer_to_binary(buffer) when is_list(buffer) do
+    IO.iodata_to_binary(buffer)
+  end
+
+  defp buffer_to_binary(buffer) when is_binary(buffer) do
+    buffer
   end
 
   defp reply_to_caller(reply, %{caller: caller, context: context} = data) do
@@ -621,7 +646,7 @@ defmodule MLLP.Client do
   defp reply_cleanup(%State{} = data) do
     data
     |> Map.put(:caller, nil)
-    |> Map.put(:receive_buffer, "")
+    |> Map.put(:receive_buffer, [])
   end
 
   @doc false
