@@ -150,7 +150,7 @@ defmodule MLLP.Client do
           close_on_recv_error: boolean(),
           backoff: any(),
           caller: pid() | nil,
-          receive_buffer: binary() | nil,
+          receive_buffer: binary(),
           context: atom()
         }
 
@@ -170,7 +170,7 @@ defmodule MLLP.Client do
             close_on_recv_error: true,
             backoff: nil,
             caller: nil,
-            receive_buffer: nil,
+            receive_buffer: "",
             context: :connect
 
   alias __MODULE__, as: State
@@ -352,6 +352,7 @@ defmodule MLLP.Client do
 
   @header MLLP.Envelope.sb()
   @trailer MLLP.Envelope.eb_cr()
+  @trailer_length byte_size(MLLP.Envelope.eb_cr())
 
   ##
   ## :gen_statem callbacks
@@ -566,18 +567,18 @@ defmodule MLLP.Client do
   end
 
   defp handle_received(reply, %{receive_buffer: buffer} = data) do
-    new_buf = (buffer && buffer <> reply) || reply
-    check = byte_size(new_buf) - 3
+    new_buf = buffer <> reply
 
     case new_buf do
-      <<@header, _ack::binary-size(check), @trailer>> ->
-        ## The response is completed, send back to caller
-        Logger.debug("Client #{inspect(self())} received a full MLLP!")
-        reply_to_caller({:ok, new_buf}, data)
-
-      <<@header, _rest::binary>> ->
-        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
-        Map.put(data, :receive_buffer, new_buf)
+      <<@header, rest::binary>> ->
+        if String.slice(rest, -@trailer_length, @trailer_length) == @trailer do
+          ## The response is completed, send back to caller
+          Logger.debug("Client #{inspect(self())} received a full MLLP!")
+          reply_to_caller({:ok, new_buf}, data)
+        else
+          Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
+          Map.put(data, :receive_buffer, new_buf)
+        end
 
       _ ->
         reply_to_caller({:error, :invalid_reply}, data)
@@ -620,7 +621,7 @@ defmodule MLLP.Client do
   defp reply_cleanup(%State{} = data) do
     data
     |> Map.put(:caller, nil)
-    |> Map.put(:receive_buffer, nil)
+    |> Map.put(:receive_buffer, "")
   end
 
   @doc false
