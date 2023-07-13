@@ -123,7 +123,7 @@ defmodule ClientTest do
       expect(MLLP.TCPMock, :connect, fn ^address, ^port, opts, 2000 ->
         # Assert we received the default options
         assert opts[:send_timeout] == 60_000
-        assert opts[:keepalive] == true
+        assert opts[:keepalive]
         {:ok, socket}
       end)
 
@@ -132,7 +132,7 @@ defmodule ClientTest do
 
       # Assert we have the correct socket_opts in the state
       assert state.socket_opts[:send_timeout] == 60_000
-      assert state.socket_opts[:keepalive] == true
+      assert state.socket_opts[:keepalive]
     end
   end
 
