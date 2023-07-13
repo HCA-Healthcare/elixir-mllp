@@ -190,6 +190,10 @@ defmodule MLLP.Client do
     "Invalid header received in server acknowledgment"
   end
 
+  def format_error(:data_after_trailer) do
+    "Data received after trailer"
+  end
+
   def format_error(posix) when is_atom(posix) do
     case :inet.format_error(posix) do
       'unknown POSIX error' ->
@@ -566,12 +570,8 @@ defmodule MLLP.Client do
     data
   end
 
-  defp handle_received(<<@header, rest::binary>> = reply, %{receive_buffer: []} = data) do
-    if has_trailer?(rest) do
-      reply_to_caller({:ok, reply}, data)
-    else
-      Map.put(data, :receive_buffer, update_receive_buffer([], reply))
-    end
+  defp handle_received(<<@header, _rest::binary>> = reply, data) do
+    receive_impl(reply, data)
   end
 
   ## No header in the first packet
@@ -580,22 +580,34 @@ defmodule MLLP.Client do
   end
 
   ## The rest of MLLP (after the header was received)
-  defp handle_received(reply, %{receive_buffer: buffer} = data) do
+  defp handle_received(reply, data) do
+    receive_impl(reply, data)
+  end
+
+  defp receive_impl(reply, %{receive_buffer: buffer} = data) do
     new_buf = update_receive_buffer(buffer, reply)
 
-    if has_trailer?(reply) do
-      reply_to_caller({:ok, buffer_to_binary(new_buf)}, data)
-    else
-      Map.put(data, :receive_buffer, new_buf)
+    case trailer_check(reply) do
+      :data_after_trailer ->
+        Logger.error("Client #{inspect(self())} received data following the trailer")
+        reply_to_caller({:error, :data_after_trailer}, data)
+
+      true ->
+        Logger.debug("Client #{inspect(self())} received a full MLLP!")
+        reply_to_caller({:ok, buffer_to_binary(new_buf)}, data)
+
+      false ->
+        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
+        Map.put(data, :receive_buffer, new_buf)
     end
   end
 
-  defp has_trailer?(packet) do
-    (String.slice(packet, -@trailer_length, @trailer_length) == @trailer)
-    |> tap(fn yes ->
-      (yes && Logger.debug("Client #{inspect(self())} received a full MLLP!")) ||
-        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{packet}")
-    end)
+  defp trailer_check(packet) do
+    case :binary.match(packet, @trailer) do
+      :nomatch -> false
+      {pos, @trailer_length} when pos + @trailer_length == byte_size(packet) -> true
+      _ -> :data_after_trailer
+    end
   end
 
   defp update_receive_buffer(buffer, packet) do
@@ -604,10 +616,6 @@ defmodule MLLP.Client do
 
   defp buffer_to_binary(buffer) when is_list(buffer) do
     IO.iodata_to_binary(buffer)
-  end
-
-  defp buffer_to_binary(buffer) when is_binary(buffer) do
-    buffer
   end
 
   defp reply_to_caller(reply, %{caller: caller, context: context} = data) do

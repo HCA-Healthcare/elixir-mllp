@@ -43,11 +43,11 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
       capture_log(fn ->
-        assert {:ok, _, _ack} =
-                 MLLP.Client.send(
-                   client_pid,
-                   HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
-                 )
+        {:ok, _, _ack} =
+          MLLP.Client.send(
+            client_pid,
+            HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
+          )
       end)
     end
 

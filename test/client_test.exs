@@ -223,8 +223,8 @@ defmodule ClientTest do
 
       log =
         capture_log([level: :debug], fn ->
-          {:ok, :application_accept, expected_ack} ==
-            Client.send(ctx.client, message)
+          assert {:ok, :application_accept, expected_ack} ==
+                   Client.send(ctx.client, message)
         end)
 
       fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
@@ -270,6 +270,21 @@ defmodule ClientTest do
         context: :recv,
         message: "Invalid header received in server acknowledgment",
         reason: :invalid_reply
+      }
+
+      assert(
+        {:error, expected_err} ==
+          Client.send(ctx.client, message)
+      )
+    end
+
+    test "when response contains data after the trailer", ctx do
+      message = "This message has a TRAILER_WITHIN - beware!"
+
+      expected_err = %MLLP.Client.Error{
+        context: :recv,
+        message: "Data received after trailer",
+        reason: :data_after_trailer
       }
 
       assert(
@@ -535,6 +550,15 @@ defmodule ClientTest do
           end
         end)
       end
+      |> then(fn msg ->
+        if String.contains?(msg, "TRAILER_WITHIN") do
+          ## Insert trailer in the middle of the message
+          {part1, part2} = String.split_at(msg, div(String.length(msg), 2))
+          part1 <> MLLP.Envelope.eb_cr() <> part2
+        else
+          msg
+        end
+      end)
     end
   end
 end
