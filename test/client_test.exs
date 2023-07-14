@@ -137,49 +137,25 @@ defmodule ClientTest do
   end
 
   describe "uses backoff to handle connection" do
-    test "with base state" do
-      address = {127, 0, 0, 1}
-      port = 4090
-      socket = make_ref()
+    setup do
+      Logger.configure(level: :debug)
+      setup_client_receiver()
+    end
 
-      expect(MLLP.TCPMock, :connect, fn ^address,
-                                        ^port,
-                                        [
-                                          :binary,
-                                          {:packet, 0},
-                                          {:active, true},
-                                          {:send_timeout, 60_000}
-                                        ],
-                                        2000 ->
-        {:ok, socket}
-      end)
-
-      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
-
-      {_fsm_state, state} = :sys.get_state(pid)
+    test "with base state", ctx do
+      {_fsm_state, state} = :sys.get_state(ctx.client)
 
       assert match?({:backoff, 1, 180, 1, :normal, _, _}, state.backoff)
     end
 
-    test "after connection failure" do
-      address = {127, 0, 0, 1}
-      port = 4090
+    test "after connection failure", ctx do
+      # Stop the receiver...
+      MLLP.Receiver.stop(ctx.port)
 
-      expect(MLLP.TCPMock, :connect, fn ^address,
-                                        ^port,
-                                        [
-                                          :binary,
-                                          {:packet, 0},
-                                          {:active, true},
-                                          {:send_timeout, 60_000}
-                                        ],
-                                        2000 ->
-        {:error, "error"}
-      end)
+      # ... and wait for backoff to change
+      Process.sleep(1000 + 100)
 
-      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock, use_backoff: true)
-
-      {_fsm_state, state} = :sys.get_state(pid)
+      {_fsm_state, state} = :sys.get_state(ctx.client)
 
       assert match?({:backoff, 1, 180, 2, :normal, _, _}, state.backoff)
     end
@@ -248,7 +224,7 @@ defmodule ClientTest do
       log =
         capture_log([level: :debug], fn ->
           assert {:error, expected_err} ==
-            Client.send(ctx.client, message, %{reply_timeout: 1000})
+                   Client.send(ctx.client, message, %{reply_timeout: 1000})
         end)
 
       fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
@@ -466,16 +442,21 @@ defmodule ClientTest do
   defp setup_client_receiver() do
     address = {127, 0, 0, 1}
     port = 4090
-    {:ok, _receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
+    {:ok, receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
     {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
 
     on_exit(fn ->
-      MLLP.Receiver.stop(port)
+      try do
+        MLLP.Receiver.stop(port)
+      rescue
+        _err -> :ok
+      end
+
       Process.sleep(100)
       Process.exit(client, :kill)
     end)
 
-    %{client: client}
+    %{client: client, receiver: receiver, port: port}
   end
 
   defp telemetry_event(
