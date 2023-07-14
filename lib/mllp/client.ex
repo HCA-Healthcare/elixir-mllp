@@ -151,6 +151,7 @@ defmodule MLLP.Client do
           backoff: any(),
           caller: pid() | nil,
           receive_buffer: iolist(),
+          last_byte_received: byte(),
           context: atom()
         }
 
@@ -171,6 +172,7 @@ defmodule MLLP.Client do
             backoff: nil,
             caller: nil,
             receive_buffer: [],
+            last_byte_received: nil,
             context: :connect
 
   alias __MODULE__, as: State
@@ -357,6 +359,8 @@ defmodule MLLP.Client do
   @header MLLP.Envelope.sb()
   @trailer MLLP.Envelope.eb_cr()
   @trailer_length byte_size(MLLP.Envelope.eb_cr())
+  @eb MLLP.Envelope.eb()
+  @cr MLLP.Envelope.cr()
 
   ##
   ## :gen_statem callbacks
@@ -584,10 +588,10 @@ defmodule MLLP.Client do
     receive_impl(reply, data)
   end
 
-  defp receive_impl(reply, %{receive_buffer: buffer} = data) do
+  def receive_impl(reply, %{receive_buffer: buffer, last_byte_received: last_byte} = data) do
     new_buf = update_receive_buffer(buffer, reply)
 
-    case trailer_check(reply) do
+    case trailer_check(reply, last_byte) do
       :data_after_trailer ->
         Logger.error("Client #{inspect(self())} received data following the trailer")
         reply_to_caller({:error, :data_after_trailer}, data)
@@ -598,11 +602,25 @@ defmodule MLLP.Client do
 
       false ->
         Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
-        Map.put(data, :receive_buffer, new_buf)
+
+        data
+        |> Map.put(:receive_buffer, new_buf)
+        |> Map.put(:last_byte_received, String.last(reply))
     end
   end
 
-  defp trailer_check(packet) do
+  ## "Split trailer" case
+  ##
+
+  defp trailer_check(<<@cr, rest::binary>>, @eb) do
+    if byte_size(rest) == 0 do
+      true
+    else
+      :data_after_trailer
+    end
+  end
+
+  defp trailer_check(packet, _last_buffer_byte) do
     case :binary.match(packet, @trailer) do
       :nomatch -> false
       {pos, @trailer_length} when pos + @trailer_length == byte_size(packet) -> true
@@ -611,7 +629,13 @@ defmodule MLLP.Client do
   end
 
   defp update_receive_buffer(buffer, packet) do
-    [buffer | packet]
+    case buffer do
+      [] ->
+        [packet]
+
+      b ->
+        [b | packet]
+    end
   end
 
   defp buffer_to_binary(buffer) when is_list(buffer) do

@@ -237,6 +237,32 @@ defmodule ClientTest do
       assert num_receives == 0
     end
 
+    test "when the trailer is split between fragments", ctx do
+      {_, data} = :sys.get_state(ctx.client)
+      frag1 = <<11, 121, 101, 115>> <> MLLP.Envelope.eb()
+      ## CR is a single byte coming in the last fragment
+      frag_cr = MLLP.Envelope.cr()
+
+      log =
+        capture_log([level: :debug], fn ->
+          ## The buffer will be reset upon reception of full MLLP
+          assert "" ==
+                   MLLP.Client.receive_impl(frag1, data)
+                   |> then(fn d ->
+                     MLLP.Client.receive_impl(frag_cr, d)
+                     |> Map.get(:receive_buffer)
+                     |> IO.iodata_to_binary()
+                   end)
+        end)
+
+      first_fragment_log = "Client #{inspect(self())} received a MLLP fragment"
+      ## One fragment...
+      assert count_occurences(log, first_fragment_log) == 1
+      cr_fragment_log = "Client #{inspect(self())} received a full MLLP!"
+      ## Trailer completed by second fragment
+      assert count_occurences(log, cr_fragment_log) == 1
+    end
+
     test "when reply header is invalid", ctx do
       ## This HL7 message triggers :invalid_reply due to TestDispatcher implementation (note DONOTWRAP!)
       message =
