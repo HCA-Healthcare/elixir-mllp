@@ -17,18 +17,18 @@ defmodule ClientTest do
 
   describe "host parameters" do
     test "accepts ipv4 / ipv6 tuples and binaries for host parameter" do
-      assert {:ok, _} = MLLP.Client.start_link({127, 0, 0, 1}, 9999)
+      assert match?({:ok, _}, MLLP.Client.start_link({127, 0, 0, 1}, 9999))
 
-      assert {:ok, _} = MLLP.Client.start_link({0, 0, 0, 0, 0, 0, 0, 1}, 9999)
+      assert match?({:ok, _}, MLLP.Client.start_link({0, 0, 0, 0, 0, 0, 0, 1}, 9999))
 
-      assert {:ok, _} = MLLP.Client.start_link("127.0.0.1", 9999)
+      assert match?({:ok, _}, MLLP.Client.start_link("127.0.0.1", 9999))
 
-      assert {:ok, _} = MLLP.Client.start_link("::1", 9999)
+      assert match?({:ok, _}, MLLP.Client.start_link("::1", 9999))
 
-      assert {:ok, _} = MLLP.Client.start_link(:localhost, 9999)
-      assert {:ok, _} = MLLP.Client.start_link("servera.app.net", 9999)
-      assert {:ok, _} = MLLP.Client.start_link('servera.unix.city.net', 9999)
-      assert {:ok, _} = MLLP.Client.start_link('127.0.0.1', 9999)
+      assert match?({:ok, _}, MLLP.Client.start_link(:localhost, 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link("servera.app.net", 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link('servera.unix.city.net', 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link('127.0.0.1', 9999))
     end
 
     test "raises on invalid addresses" do
@@ -158,7 +158,7 @@ defmodule ClientTest do
 
       {_fsm_state, state} = :sys.get_state(pid)
 
-      assert {:backoff, 1, 180, 1, :normal, _, _} = state.backoff
+      assert match?({:backoff, 1, 180, 1, :normal, _, _}, state.backoff)
     end
 
     test "after connection failure" do
@@ -181,7 +181,7 @@ defmodule ClientTest do
 
       {_fsm_state, state} = :sys.get_state(pid)
 
-      assert {:backoff, 1, 180, 2, :normal, _, _} = state.backoff
+      assert match?({:backoff, 1, 180, 2, :normal, _, _}, state.backoff)
     end
   end
 
@@ -247,7 +247,7 @@ defmodule ClientTest do
 
       log =
         capture_log([level: :debug], fn ->
-          {:error, expected_err} ==
+          assert {:error, expected_err} ==
             Client.send(ctx.client, message, %{reply_timeout: 1000})
         end)
 
