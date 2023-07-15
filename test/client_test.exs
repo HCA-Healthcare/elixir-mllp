@@ -374,6 +374,18 @@ defmodule ClientTest do
                end
              )
     end
+
+    test "handles requests while processing 'send'", %{client: client} = _ctx do
+      slow_processing_msg = "Asking receiver to SLOWDOWN..."
+      ## One process sends a message, other 2 ask if the client is connected
+      send_task = Task.async(fn -> Client.send(client, slow_processing_msg) end)
+      Process.sleep(10)
+      ## The client is in receivng mode...
+      {:receiving, _state} = :sys.get_state(client)
+      ## ...and accepts other requests
+      assert Client.is_connected?(client)
+      assert Task.await(send_task) == {:ok, slow_processing_msg}
+    end
   end
 
   describe "send_async/2" do
