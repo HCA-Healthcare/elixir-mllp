@@ -551,6 +551,11 @@ defmodule MLLP.Client do
     {:next_state, :disconnected, handle_error(reason, maybe_close(reason, data))}
   end
 
+  def receiving({:call, _from} = event_kind, request, data)
+      when request in [:is_connected, :reconnect] do
+    connected(event_kind, request, data)
+  end
+
   def receiving(event, unknown, _data) do
     unexpected_message(:receiving, event, unknown)
   end
@@ -598,7 +603,7 @@ defmodule MLLP.Client do
 
       true ->
         Logger.debug("Client #{inspect(self())} received a full MLLP!")
-        reply_to_caller({:ok, buffer_to_binary(new_buf)}, data)
+        reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
 
       false ->
         Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
@@ -613,7 +618,7 @@ defmodule MLLP.Client do
   ##
 
   defp trailer_check(<<@cr, rest::binary>>, @eb) do
-    if byte_size(rest) == 0 do
+    if rest == "" do
       true
     else
       :data_after_trailer
@@ -636,10 +641,6 @@ defmodule MLLP.Client do
       b ->
         [b | packet]
     end
-  end
-
-  defp buffer_to_binary(buffer) when is_list(buffer) do
-    IO.iodata_to_binary(buffer)
   end
 
   defp reply_to_caller(reply, %{caller: caller, context: context} = data) do
@@ -847,8 +848,12 @@ defmodule MLLP.Client do
     }
   end
 
+  defp get_context(%State{context: nil}) do
+    :unknown
+  end
+
   defp get_context(%State{context: context}) do
-    (context && context) || :unknown
+    context
   end
 
   defp normalize_address!({_, _, _, _} = addr), do: addr
