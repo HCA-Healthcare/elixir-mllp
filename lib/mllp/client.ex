@@ -677,6 +677,7 @@ defmodule MLLP.Client do
     data
     |> Map.put(:caller, nil)
     |> Map.put(:receive_buffer, [])
+    |> Map.put(:last_byte_received, nil)
   end
 
   @doc false
