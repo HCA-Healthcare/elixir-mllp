@@ -619,8 +619,7 @@ defmodule MLLP.Client do
 
   defp trailer_check(@cr, @eb), do: true
 
-  defp trailer_check(<<@cr,  _::binary>>, @eb), do: :data_after_trailer
-  end
+  defp trailer_check(<<@cr, _::binary>>, @eb), do: :data_after_trailer
 
   defp trailer_check(packet, _last_buffer_byte) do
     case :binary.match(packet, @trailer) do
@@ -631,13 +630,7 @@ defmodule MLLP.Client do
   end
 
   defp update_receive_buffer(buffer, packet) do
-    case buffer do
-      [] ->
-        [packet]
-
-      b ->
-        [b | packet]
-    end
+    [buffer | packet]
   end
 
   defp reply_to_caller(reply, %{caller: caller, context: context} = data) do
