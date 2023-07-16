@@ -617,12 +617,9 @@ defmodule MLLP.Client do
   ## "Split trailer" case
   ##
 
-  defp trailer_check(<<@cr, rest::binary>>, @eb) do
-    if rest == "" do
-      true
-    else
-      :data_after_trailer
-    end
+  defp trailer_check(@cr, @eb), do: true
+
+  defp trailer_check(<<@cr,  _::binary>>, @eb), do: :data_after_trailer
   end
 
   defp trailer_check(packet, _last_buffer_byte) do
