@@ -380,10 +380,10 @@ defmodule ClientTest do
       ## One process sends a message, other 2 ask if the client is connected
       send_task = Task.async(fn -> Client.send(client, slow_processing_msg) end)
       Process.sleep(10)
-      ## The client is in receivng mode...
+      ## The client is in receiving mode...
       {:receiving, _state} = :sys.get_state(client)
       ## ...and accepts other requests
-      assert Client.is_connected?(client)
+      assert Enum.all?(1..2, fn _ -> Client.is_connected?(client) end)
       assert Task.await(send_task) == {:ok, slow_processing_msg}
     end
   end
