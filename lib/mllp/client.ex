@@ -542,7 +542,7 @@ defmodule MLLP.Client do
   def receiving(:info, {transport, socket, incoming}, %{socket: socket} = data)
       when transport in [:tcp, :ssl] do
     new_data = handle_received(incoming, data)
-    next_state = (new_data.caller && :receiving) || :connected
+    next_state = next_after_receiving(new_data)
     {:next_state, next_state, new_data}
   end
 
@@ -563,6 +563,18 @@ defmodule MLLP.Client do
 
   def receiving(event, unknown, _data) do
     unexpected_message(:receiving, event, unknown)
+  end
+
+  defp next_after_receiving(%State{socket: nil}) do
+    :disconnected
+  end
+
+  defp next_after_receiving(%State{caller: nil}) do
+    :connected
+  end
+
+  defp next_after_receiving(%State{} = _state) do
+    :receiving
   end
 
   ########################################
@@ -707,7 +719,7 @@ defmodule MLLP.Client do
       data
     )
 
-    Logger.debug("Stopping connection: #{format_error(error)}}")
+    Logger.debug("Stopping connection: #{format_error(error)}")
 
     if error == :unexpected_packet_received do
       :ok = :inet.setopts(socket, linger: {true, 0})

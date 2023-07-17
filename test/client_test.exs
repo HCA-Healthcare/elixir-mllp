@@ -175,13 +175,20 @@ defmodule ClientTest do
       log =
         capture_log([level: :debug], fn ->
           Kernel.send(pid, {:tcp, socket, "what's up?"})
-          Process.sleep(100)
+
+          {:error, _} =
+            Client.send(
+              pid,
+              "this should fail as the connection will be dropped on unexpected packet"
+            )
+
+          refute Client.is_connected?(pid)
+          Client.reconnect(pid)
+          {:ok, _} = Client.send(pid, "ok")
         end)
 
       assert String.contains?(log, Client.format_error(:unexpected_packet_received))
       assert String.contains?(log, "Connection closed")
-
-      refute Client.is_connected?(pid)
     end
   end
 
