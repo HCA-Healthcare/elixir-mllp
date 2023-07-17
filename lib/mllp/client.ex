@@ -238,6 +238,7 @@ defmodule MLLP.Client do
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`).
      Note that `:binary`, `:packet`, and `:active` can not be overridden. Default options are enumerated below.
       - send_timeout: Defaults to 60 seconds
+      - send_timeout_close: Defaults to true
 
   * `:close_on_recv_error` - A boolean value which dictates whether the client socket will be
      closed when an error in receiving a reply is encountered, this includes timeouts.
@@ -715,7 +716,7 @@ defmodule MLLP.Client do
 
   defp attempt_connection(%State{} = data) do
     telemetry(:status, %{status: :connecting}, data)
-    opts = [:binary, {:packet, 0}, {:active, true}] ++ data.socket_opts ++ data.tls_opts
+    opts = fixed_socket_opts() ++ data.socket_opts ++ data.tls_opts
 
     case data.tcp.connect(data.address, data.port, opts, 2000) do
       {:ok, socket} ->
@@ -772,11 +773,21 @@ defmodule MLLP.Client do
     opts
   end
 
-  @default_opts %{
-    telemetry_module: MLLP.DefaultTelemetry,
-    tls_opts: [],
-    socket_opts: [send_timeout: 60_000]
-  }
+  def default_opts() do
+    %{
+      telemetry_module: MLLP.DefaultTelemetry,
+      tls_opts: [],
+      socket_opts: default_socket_opts()
+    }
+  end
+
+  def default_socket_opts() do
+    [send_timeout: 60_000, send_timeout_close: true]
+  end
+
+  def fixed_socket_opts() do
+    [:binary, {:packet, 0}, {:active, true}]
+  end
 
   @default_send_opts %{
     reply_timeout: 60_000
@@ -799,10 +810,10 @@ defmodule MLLP.Client do
 
     send_opts = Map.merge(@default_send_opts, send_opts)
 
-    socket_opts = Keyword.merge(@default_opts[:socket_opts], opts[:socket_opts] || [])
+    socket_opts = Keyword.merge(default_socket_opts(), opts[:socket_opts] || [])
 
     opts
-    |> Map.merge(@default_opts)
+    |> Map.merge(default_opts())
     |> Map.put_new(:tcp, socket_module)
     |> Map.put(:pid, self())
     |> Map.put(:tls_opts, opts.tls)

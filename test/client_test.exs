@@ -80,19 +80,12 @@ defmodule ClientTest do
     test "with default options" do
       address = {127, 0, 0, 1}
       port = 4090
-      socket = make_ref()
 
-      expect(MLLP.TCPMock, :connect, fn ^address, ^port, opts, 2000 ->
-        # Assert we received the default options
-        assert opts[:send_timeout] == 60_000
-        {:ok, socket}
-      end)
-
-      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCPMock)
+      {:ok, pid} = Client.start_link(address, port, tcp: MLLP.TCP)
       {_fsm_state, state} = :sys.get_state(pid)
 
       # Assert we have the correct socket_opts in the state
-      assert state.socket_opts == [send_timeout: 60_000]
+      assert Keyword.equal?(state.socket_opts, Client.default_socket_opts())
     end
 
     test "with default options overridden" do
@@ -111,7 +104,7 @@ defmodule ClientTest do
       {_fsm_state, state} = :sys.get_state(pid)
 
       # Assert we have the correct socket_opts in the state
-      assert state.socket_opts == [send_timeout: 10_000]
+      assert state.socket_opts[:send_timeout] == 10_000
     end
 
     test "with additional options" do
@@ -310,14 +303,12 @@ defmodule ClientTest do
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
       packet = MLLP.Envelope.wrap_message(raw_hl7)
+      socket_opts = Client.fixed_socket_opts() ++ Client.default_socket_opts()
 
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
+        fn ^address, ^port, ^socket_opts, 2000 ->
           {:ok, socket}
         end
       )
@@ -410,14 +401,12 @@ defmodule ClientTest do
       socket = make_ref()
       message = "Hello, it's me"
       packet = MLLP.Envelope.wrap_message(message)
+      socket_opts = Client.fixed_socket_opts() ++ Client.default_socket_opts()
 
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
+        fn ^address, ^port, ^socket_opts, 2000 ->
           {:ok, socket}
         end
       )
@@ -436,13 +425,12 @@ defmodule ClientTest do
       message = HL7.Message.new(raw_hl7)
       packet = MLLP.Envelope.wrap_message(raw_hl7)
 
+      socket_opts = Client.fixed_socket_opts() ++ Client.default_socket_opts()
+
       MLLP.TCPMock
       |> expect(
         :connect,
-        fn ^address,
-           ^port,
-           [:binary, {:packet, 0}, {:active, true}, {:send_timeout, 60_000}],
-           2000 ->
+        fn ^address, ^port, ^socket_opts, 2000 ->
           {:ok, socket}
         end
       )

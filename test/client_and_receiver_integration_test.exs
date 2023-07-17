@@ -397,7 +397,7 @@ defmodule ClientAndReceiverIntegrationTest do
         )
 
       assert error.context in [:send, :recv]
-      assert error.reason == :closed
+      assert error.reason in [:closed, :einval]
     end
 
     @tag allowed_clients: ["127.0.0.0", "localhost"]
