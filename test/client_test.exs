@@ -154,15 +154,34 @@ defmodule ClientTest do
     end
   end
 
-  describe "handle_info/2" do
-    test "handles unexpected info messages" do
-      assert {:ok, pid} = MLLP.Client.start_link({127, 0, 0, 1}, 9998, use_backoff: true)
+  describe "unexpected messages" do
+    setup do
+      Logger.configure(level: :debug)
+      setup_client_receiver()
+    end
 
+    test "handles unexpected info messages", %{client: pid} = _ctx do
       assert capture_log(fn ->
                Kernel.send(pid, :eh?)
                Process.sleep(100)
                assert Process.alive?(pid)
              end) =~ "Unknown message received => :eh?"
+    end
+
+    test "handles unexpected incoming packet", %{client: pid} = _ctx do
+      {_fsm_state, state} = :sys.get_state(pid)
+      socket = state.socket
+
+      log =
+        capture_log([level: :debug], fn ->
+          Kernel.send(pid, {:tcp, socket, "what's up?"})
+          Process.sleep(100)
+        end)
+
+      assert String.contains?(log, Client.format_error(:unexpected_packet_received))
+      assert String.contains?(log, "Connection closed")
+
+      refute Client.is_connected?(pid)
     end
   end
 

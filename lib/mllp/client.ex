@@ -196,6 +196,10 @@ defmodule MLLP.Client do
     "Data received after trailer"
   end
 
+  def format_error(:unexpected_packet_received) do
+    "Unexpected packet received"
+  end
+
   def format_error(posix) when is_atom(posix) do
     case :inet.format_error(posix) do
       'unknown POSIX error' ->
@@ -576,8 +580,9 @@ defmodule MLLP.Client do
   ## Handle the (fragmented) responses to `send` request from a caller
 
   defp handle_received(_reply, %{caller: nil} = data) do
-    ## No caller, ignore
-    data
+    ## No caller, we must have received the full MLLP already,
+    ## or it could be a request from external process other than the receiver
+    maybe_close(:unexpected_packet_received, data)
   end
 
   defp handle_received(<<@header, _rest::binary>> = reply, data) do
@@ -691,15 +696,24 @@ defmodule MLLP.Client do
 
   defp maybe_close(_reason, data), do: data
 
-  defp stop_connection(%State{} = data, error, context) do
-    if data.socket != nil do
-      telemetry(
-        :status,
-        %{status: :disconnected, error: format_error(error), context: context},
-        data
-      )
+  defp stop_connection(%State{socket: nil} = data, _error, _context) do
+    data
+  end
 
-      data.tcp.close(data.socket)
+  defp stop_connection(%State{socket: socket, tcp: tcp} = data, error, context) do
+    telemetry(
+      :status,
+      %{status: :disconnected, error: format_error(error), context: context},
+      data
+    )
+
+    Logger.debug("Stopping connection: #{format_error(error)}}")
+
+    if error == :unexpected_packet_received do
+      :ok = :inet.setopts(socket, linger: {true, 0})
+      tcp.shutdown(socket, :read_write)
+    else
+      tcp.close(socket)
     end
 
     data

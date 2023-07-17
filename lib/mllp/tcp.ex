@@ -22,4 +22,5 @@ defmodule MLLP.TCP do
   defdelegate recv(socket, length, timeout), to: :gen_tcp
   defdelegate connect(address, port, options, timeout), to: :gen_tcp
   defdelegate close(socket), to: :gen_tcp
+  defdelegate shutdown(socket, opts), to: :gen_tcp
 end

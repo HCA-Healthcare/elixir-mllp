@@ -22,4 +22,5 @@ defmodule MLLP.TLS do
   defdelegate recv(socket, length, timeout), to: :ssl
   defdelegate connect(address, port, options, timeout), to: :ssl
   defdelegate close(socket), to: :ssl
+  defdelegate shutdown(socket, opts), to: :ssl
 end
