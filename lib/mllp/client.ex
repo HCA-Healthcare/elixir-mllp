@@ -3,7 +3,7 @@ defmodule MLLP.ClientContract do
   MLLP.ClientContract provides the behavior implemented by MLLP.Client. It may be useful
   for testing in your own application with tools such as [`Mox`](https://hexdocs.pm/mox/)
   """
-  @type error_type :: :connect_failure | :send_error | :recv_error
+  @type error_type :: :tcp_error | :send_error | :recv_error
   @type error_reason :: :closed | :timeout | :no_socket | :inet.posix()
 
   @type client_error :: MLLP.Client.Error.t()
@@ -55,10 +55,10 @@ defmodule MLLP.Client do
   Upon successful start up via `start_link/4`, the  client will attempt to establish a connection to the given address
   on the provided port. If a connection can not be immediately established, the client will keep
   trying to establish a connection per the value of `:auto_reconnect_interval` which defaults to
-  1 second. Therefor it is possible that before a connection is fully established, the caller
+  1 second. Therefore it is possible that before a connection is fully established, the caller
   may attempt to send a message which will result in `MLLP.Client.Error.t()` being returned containing
   the last error encountered in trying to establish a connection. Additionally, said behavour could be encountered
-  at any point during life span of an MLLP.Client process if the connection becomees severed on either side.
+  at any point during life span of an MLLP.Client process if the connection becomes severed on either side.
 
   All connections, send, and receive failures will be logged as errors.
 
@@ -125,12 +125,13 @@ defmodule MLLP.Client do
   ```
   """
 
-  use GenServer
   require Logger
 
   alias MLLP.{Envelope, Ack, ClientContract, TCP, TLS}
 
-  @behaviour ClientContract
+  @behaviour MLLP.ClientContract
+
+  @behaviour :gen_statem
 
   @type pid_ref :: atom | pid | {atom, any} | {:via, atom, any}
   @type ip_address :: :inet.socket_address() | String.t()
@@ -141,14 +142,17 @@ defmodule MLLP.Client do
           address: ip_address(),
           port: char(),
           auto_reconnect_interval: non_neg_integer(),
-          pending_reconnect: reference() | nil,
           pid: pid() | nil,
           telemetry_module: module() | nil,
           tcp: module() | nil,
           tls_opts: Keyword.t(),
           socket_opts: Keyword.t(),
           close_on_recv_error: boolean(),
-          backoff: any()
+          backoff: any(),
+          caller: pid() | nil,
+          receive_buffer: iolist(),
+          last_byte_received: byte(),
+          context: atom()
         }
 
   defstruct socket: nil,
@@ -156,17 +160,20 @@ defmodule MLLP.Client do
             auto_reconnect_interval: 1000,
             address: {127, 0, 0, 1},
             port: 0,
-            pending_reconnect: nil,
             pid: nil,
             telemetry_module: nil,
             tcp: nil,
-            connect_failure: nil,
+            tcp_error: nil,
             host_string: nil,
             send_opts: %{},
             tls_opts: [],
             socket_opts: [],
             close_on_recv_error: true,
-            backoff: nil
+            backoff: nil,
+            caller: nil,
+            receive_buffer: [],
+            last_byte_received: nil,
+            context: :connect
 
   alias __MODULE__, as: State
 
@@ -183,6 +190,14 @@ defmodule MLLP.Client do
 
   def format_error(:invalid_reply) do
     "Invalid header received in server acknowledgment"
+  end
+
+  def format_error(:data_after_trailer) do
+    "Data received after trailer"
+  end
+
+  def format_error(:unexpected_packet_received) do
+    "Unexpected packet received"
   end
 
   def format_error(posix) when is_atom(posix) do
@@ -227,6 +242,7 @@ defmodule MLLP.Client do
   * `:socket_opts` -  A list of socket options as supported by [`:gen_tcp`](`:gen_tcp`).
      Note that `:binary`, `:packet`, and `:active` can not be overridden. Default options are enumerated below.
       - send_timeout: Defaults to 60 seconds
+      - send_timeout_close: Defaults to true
 
   * `:close_on_recv_error` - A boolean value which dictates whether the client socket will be
      closed when an error in receiving a reply is encountered, this includes timeouts.
@@ -248,9 +264,10 @@ defmodule MLLP.Client do
         ) :: {:ok, pid()}
 
   def start_link(address, port, options \\ []) do
-    GenServer.start_link(
+    :gen_statem.start_link(
       __MODULE__,
-      [address: normalize_address!(address), port: port] ++ options
+      [address: normalize_address!(address), port: port] ++ options,
+      []
     )
   end
 
@@ -258,13 +275,13 @@ defmodule MLLP.Client do
   Returns true if the connection is open and established, otherwise false.
   """
   @spec is_connected?(pid :: pid()) :: boolean()
-  def is_connected?(pid), do: GenServer.call(pid, :is_connected)
+  def is_connected?(pid), do: :gen_statem.call(pid, :is_connected)
 
   @doc """
   Instructs the client to disconnect (if connected) and attempt a reconnect.
   """
   @spec reconnect(pid :: pid()) :: :ok
-  def reconnect(pid), do: GenServer.call(pid, :reconnect)
+  def reconnect(pid), do: :gen_statem.call(pid, :reconnect)
 
   @doc """
   Sends a message and receives a response.
@@ -283,6 +300,7 @@ defmodule MLLP.Client do
   * `:reply_timeout` - Optionally specify a timeout value for receiving a response. Must be a positive integer or
      `:infinity`. Defaults to 60 seconds.
   """
+  @impl true
   @spec send(
           pid :: pid,
           payload :: HL7.Message.t() | String.t() | binary(),
@@ -298,7 +316,7 @@ defmodule MLLP.Client do
   def send(pid, %HL7.Message{} = payload, options, timeout) do
     raw_message = to_string(payload)
 
-    case GenServer.call(pid, {:send, raw_message, options}, timeout) do
+    case :gen_statem.call(pid, {:send, raw_message, options}, timeout) do
       {:ok, reply} ->
         verify_ack(reply, raw_message)
 
@@ -308,7 +326,7 @@ defmodule MLLP.Client do
   end
 
   def send(pid, payload, options, timeout) do
-    case GenServer.call(pid, {:send, payload, options}, timeout) do
+    case :gen_statem.call(pid, {:send, payload, options}, timeout) do
       {:ok, wrapped_message} ->
         {:ok, MLLP.Envelope.unwrap_message(wrapped_message)}
 
@@ -323,31 +341,43 @@ defmodule MLLP.Client do
   Given the synchronous nature of MLLP/HL7 this function is mainly useful for
   testing purposes.
   """
+  @impl true
   def send_async(pid, payload, timeout \\ :infinity)
 
   def send_async(pid, %HL7.Message{} = payload, timeout) do
-    GenServer.call(pid, {:send_async, to_string(payload)}, timeout)
+    send_async(pid, to_string(payload), timeout)
   end
 
-  def send_async(pid, payload, timeout) do
-    GenServer.call(pid, {:send_async, payload}, timeout)
+  def send_async(pid, payload, timeout) when is_binary(payload) do
+    :gen_statem.call(pid, {:send_async, payload, []}, timeout)
   end
 
   @doc """
   Stops an MLLP.Client given a MLLP.Client pid.
 
-  This function will always return `:ok` per `GenServer.stop/1`, thus
+  This function will always return `:ok` per `:gen_statem.stop/1`, thus
   you may give it a pid that references a client which is already stopped.
   """
   @spec stop(pid :: pid()) :: :ok
-  def stop(pid), do: GenServer.stop(pid)
+  def stop(pid), do: :gen_statem.stop(pid)
 
   @header MLLP.Envelope.sb()
   @trailer MLLP.Envelope.eb_cr()
+  @trailer_length byte_size(MLLP.Envelope.eb_cr())
+  @eb MLLP.Envelope.eb()
+  @cr MLLP.Envelope.cr()
 
-  ## GenServer callbacks
-  @doc false
-  @spec init(Keyword.t()) :: {:ok, MLLP.Client.t(), {:continue, :init_socket}}
+  ##
+  ## :gen_statem callbacks
+  ##
+  @impl true
+  def callback_mode() do
+    [:state_functions, :state_enter]
+  end
+
+  @impl true
+  @spec init(Keyword.t()) ::
+          {:ok, :disconnected, MLLP.Client.t(), [{:next_event, :internal, :connect}]}
   def init(options) do
     opts =
       options
@@ -356,282 +386,397 @@ defmodule MLLP.Client do
       |> maybe_set_default_options()
       |> put_socket_address()
 
-    {:ok, struct(State, opts), {:continue, :init_socket}}
+    {:ok, :disconnected, struct(State, opts), [{:next_event, :internal, :connect}]}
   end
 
-  @doc false
-  def handle_continue(:init_socket, state) do
-    state1 = attempt_connection(state)
-    {:noreply, state1}
+  ############################
+  #### Disconnected state ####
+  ############################
+
+  def disconnected(:enter, :disconnected, data) do
+    {:keep_state, data, reconnect_action(data)}
   end
 
-  def handle_call(:is_connected, _reply, state) do
-    {:reply, (state.socket && !state.pending_reconnect) == true, state}
+  def disconnected(:enter, current_state, data) when current_state in [:connected, :receiving] do
+    Logger.error("Connection closed")
+    {:keep_state, data, reconnect_action(data)}
   end
 
-  def handle_call(:reconnect, _from, state) do
-    new_state =
-      state
-      |> stop_connection(:timeout, "timeout message")
-      |> attempt_connection()
+  def disconnected(:internal, :connect, data) do
+    {result, new_state} = attempt_connection(data)
 
-    {:reply, :ok, new_state}
+    case result do
+      :error ->
+        {:keep_state, new_state, reconnect_action(new_state)}
+
+      :ok ->
+        {:next_state, :connected, new_state}
+    end
   end
 
-  def handle_call(_msg, _from, %State{socket: nil} = state) do
-    telemetry(
-      :status,
-      %{
-        status: :disconnected,
-        error: :no_socket,
-        context: "MLLP.Client disconnected failure"
-      },
-      state
+  def disconnected(:state_timeout, :reconnect, data) do
+    actions = [{:next_event, :internal, :connect}]
+    {:keep_state, data, actions}
+  end
+
+  def disconnected({:call, from}, :reconnect, _data) do
+    Logger.debug("Request to reconnect accepted")
+    {:keep_state_and_data, [{:reply, from, :ok}, {:next_event, :internal, :connect}]}
+  end
+
+  def disconnected({:call, from}, {:send, _message, _options}, data) do
+    actions = [{:reply, from, {:error, new_error(:send, data.tcp_error)}}]
+    {:keep_state_and_data, actions}
+  end
+
+  def disconnected({:call, from}, :is_connected, _data) do
+    {:keep_state_and_data, [{:reply, from, false}]}
+  end
+
+  def disconnected(event, unknown, _data) do
+    unexpected_message(:disconnected, event, unknown)
+  end
+
+  #########################
+  #### Connected state ####
+  #########################
+  def connected(:enter, :disconnected, _data) do
+    Logger.debug("Connection established")
+    :keep_state_and_data
+  end
+
+  def connected(:enter, :receiving, _data) do
+    :keep_state_and_data
+  end
+
+  def connected({:call, from}, {send_type, message, options}, data)
+      when send_type in [:send, :send_async] do
+    payload = MLLP.Envelope.wrap_message(message)
+
+    case data.tcp.send(data.socket, payload) do
+      :ok ->
+        {:next_state, :receiving,
+         data
+         |> Map.put(:context, :recv)
+         |> Map.put(:caller, from), send_action(send_type, from, options, data)}
+
+      {:error, reason} ->
+        telemetry(
+          :status,
+          %{
+            status: :disconnected,
+            error: format_error(reason),
+            context: "send message failure"
+          },
+          data
+        )
+
+        error_reply = {:error, new_error(:send, reason)}
+        {:keep_state_and_data, [{:reply, from, error_reply}]}
+    end
+  end
+
+  def connected({:call, from}, :is_connected, _data) do
+    {:keep_state_and_data, [{:reply, from, true}]}
+  end
+
+  def connected({:call, from}, :reconnect, _data) do
+    {:keep_state_and_data, [{:reply, from, :ok}]}
+  end
+
+  def connected(:info, {transport, socket, _incoming} = msg, %{socket: socket} = data)
+      when transport in [:tcp, :ssl] do
+    receiving(:info, msg, data)
+  end
+
+  def connected(:info, {transport_closed, _socket}, data)
+      when transport_closed in [:tcp_closed, :ssl_closed] do
+    {:next_state, :disconnected, handle_closed(data)}
+  end
+
+  def connected(event, unknown, _data) do
+    unexpected_message(:connected, event, unknown)
+  end
+
+  defp reconnect_action(
+         %State{backoff: backoff, auto_reconnect_interval: auto_reconnect_interval} = _state
+       ) do
+    [{:state_timeout, reconnect_timeout(backoff, auto_reconnect_interval), :reconnect}]
+  end
+
+  defp send_action(:send, _from, options, data) do
+    reply_timeout = Map.get(options, :reply_timeout, data.send_opts.reply_timeout)
+    [{:state_timeout, reply_timeout, :receive_timeout}]
+  end
+
+  defp send_action(:send_async, from, _options, _data) do
+    [{:reply, from, {:ok, :sent}}]
+  end
+
+  defp reconnect_timeout(nil, interval) do
+    interval
+  end
+
+  defp reconnect_timeout(backoff, _interval) do
+    backoff
+    |> :backoff.get()
+    |> :timer.seconds()
+  end
+
+  #########################
+  #### Receiving state ####
+  #########################
+  def receiving(:enter, :connected, _data) do
+    Logger.debug("Waiting for response...")
+    :keep_state_and_data
+  end
+
+  def receiving({:call, from}, {:send, _message, _options}, _data) do
+    {:keep_state_and_data, [{:reply, from, format_reply({:error, :busy_with_other_call}, :send)}]}
+  end
+
+  def receiving(:state_timeout, :receive_timeout, data) do
+    {:next_state, :connected, reply_to_caller({:error, :timeout}, maybe_close(:timeout, data))}
+  end
+
+  def receiving(:info, {transport, socket, incoming}, %{socket: socket} = data)
+      when transport in [:tcp, :ssl] do
+    new_data = handle_received(incoming, data)
+    next_state = next_after_receiving(new_data)
+    {:next_state, next_state, new_data}
+  end
+
+  def receiving(:info, {transport_closed, socket}, %{socket: socket} = data)
+      when transport_closed in [:tcp_closed, :ssl_closed] do
+    {:next_state, :disconnected, handle_closed(data)}
+  end
+
+  def receiving(:info, {transport_error, socket, reason}, %{socket: socket} = data)
+      when transport_error in [:tcp_error, :ssl_error] do
+    {:next_state, :disconnected, handle_error(reason, maybe_close(reason, data))}
+  end
+
+  def receiving({:call, _from} = event_kind, request, data)
+      when request in [:is_connected, :reconnect] do
+    connected(event_kind, request, data)
+  end
+
+  def receiving(event, unknown, _data) do
+    unexpected_message(:receiving, event, unknown)
+  end
+
+  defp next_after_receiving(%State{socket: nil}) do
+    :disconnected
+  end
+
+  defp next_after_receiving(%State{caller: nil}) do
+    :connected
+  end
+
+  defp next_after_receiving(%State{} = _state) do
+    :receiving
+  end
+
+  ########################################
+  ### End of :gen_statem callbacks ###
+  ########################################
+
+  defp unexpected_message(state, event, message) do
+    Logger.warn(
+      "Event: #{inspect(event)} in state #{state}. Unknown message received => #{inspect(message)}"
     )
 
-    err = new_error(:connect, state.connect_failure)
-    {:reply, {:error, err}, state}
+    :keep_state_and_data
   end
 
-  def handle_call({:send, message, options}, _from, state) do
-    options1 = Map.merge(state.send_opts, options)
-    telemetry(:sending, %{}, state)
-    payload = MLLP.Envelope.wrap_message(message)
+  ## Handle the (fragmented) responses to `send` request from a caller
 
-    case state.tcp.send(state.socket, payload) do
-      :ok ->
-        timeout = maybe_convert_time(options1.reply_timeout, :millisecond, :microsecond)
+  defp handle_received(_reply, %{caller: nil} = data) do
+    ## No caller, we must have received the full MLLP already,
+    ## or it could be a request from external process other than the receiver
+    maybe_close(:unexpected_packet_received, data)
+  end
 
-        case recv_ack(state, timeout) do
-          {:ok, reply} ->
-            {:reply, {:ok, reply}, state}
+  defp handle_received(<<@header, _rest::binary>> = reply, data) do
+    receive_impl(reply, data)
+  end
 
-          {:error, reason} ->
-            telemetry(
-              :status,
-              %{
-                status: :disconnected,
-                error: format_error(reason),
-                context: "receive ACK failure"
-              },
-              state
-            )
+  ## No header in the first packet
+  defp handle_received(_reply, %{receive_buffer: []} = data) do
+    reply_to_caller({:error, :invalid_reply}, data)
+  end
 
-            new_state =
-              state
-              |> maybe_close()
-              |> maintain_reconnect_timer()
+  ## The rest of MLLP (after the header was received)
+  defp handle_received(reply, data) do
+    receive_impl(reply, data)
+  end
 
-            reply = {:error, new_error(:recv, reason)}
-            {:reply, reply, new_state}
-        end
+  def receive_impl(reply, %{receive_buffer: buffer, last_byte_received: last_byte} = data) do
+    new_buf = update_receive_buffer(buffer, reply)
 
-      {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: format_error(reason), context: "send message failure"},
-          state
-        )
+    case trailer_check(reply, last_byte) do
+      :data_after_trailer ->
+        Logger.error("Client #{inspect(self())} received data following the trailer")
+        reply_to_caller({:error, :data_after_trailer}, data)
 
-        new_state = maintain_reconnect_timer(state)
-        reply = {:error, new_error(:send, reason)}
-        {:reply, reply, new_state}
+      true ->
+        Logger.debug("Client #{inspect(self())} received a full MLLP!")
+        reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
+
+      false ->
+        Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
+
+        data
+        |> Map.put(:receive_buffer, new_buf)
+        |> Map.put(:last_byte_received, String.last(reply))
     end
   end
 
-  def handle_call({:send_async, message}, _from, state) do
-    telemetry(:sending, %{}, state)
-    payload = MLLP.Envelope.wrap_message(message)
+  ## "Split trailer" case
+  ##
 
-    case state.tcp.send(state.socket, payload) do
-      :ok ->
-        {:reply, {:ok, :sent}, state}
+  defp trailer_check(@cr, @eb), do: true
 
-      {:error, reason} ->
-        telemetry(
-          :status,
-          %{status: :disconnected, error: format_error(reason), context: "send message failure"},
-          state
-        )
+  defp trailer_check(<<@cr, _::binary>>, @eb), do: :data_after_trailer
 
-        new_state = maintain_reconnect_timer(state)
-        reply = {:error, new_error(:send, reason)}
-        {:reply, reply, new_state}
+  defp trailer_check(packet, _last_buffer_byte) do
+    case :binary.match(packet, @trailer) do
+      :nomatch -> false
+      {pos, @trailer_length} when pos + @trailer_length == byte_size(packet) -> true
+      _ -> :data_after_trailer
     end
   end
 
-  @doc false
-  def handle_info(:timeout, state) do
-    new_state =
-      state
-      |> stop_connection(:timeout, "timeout message")
-      |> attempt_connection()
-
-    {:noreply, new_state}
+  defp update_receive_buffer(buffer, packet) do
+    [buffer | packet]
   end
 
-  def handle_info(unknown, state) do
-    Logger.warn("Unknown kernel message received => #{inspect(unknown)}")
-    {:noreply, state}
+  defp reply_to_caller(reply, %{caller: caller, context: context} = data) do
+    caller && :gen_statem.reply(caller, format_reply(reply, context))
+    reply_cleanup(data)
   end
 
-  @doc false
-  def terminate(reason = :normal, state) do
-    Logger.debug("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
-    stop_connection(state, reason, "process terminated")
+  defp format_reply({:ok, result}, _context) do
+    {:ok, result}
   end
 
-  def terminate(reason, state) do
-    Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(state)}")
-    stop_connection(state, reason, "process terminated")
+  defp format_reply({:error, error}, context) do
+    {:error, new_error(context, error)}
   end
 
-  defp maybe_convert_time(:infinity, _, _), do: :infinity
-
-  defp maybe_convert_time(t, from, to) do
-    System.convert_time_unit(t, from, to)
+  defp handle_closed(data) do
+    handle_error(:closed, data)
   end
 
-  defp maybe_close(%{close_on_recv_error: true} = state) do
-    state
-    |> stop_connection(:timeout, "recv error, closing connection to cleanup")
-    |> attempt_connection()
-  end
+  ## Handle transport errors
+  defp handle_error(reason, data) do
+    Logger.error("Error: #{inspect(reason)}, data: #{inspect(data)}")
 
-  defp maybe_close(state), do: state
-
-  defp recv_ack(state, timeout) do
-    recv_ack(state, {timeout, 0}, <<>>)
-  end
-
-  defp recv_ack(_state, {time_left, time_owed}, _buffer)
-       when is_integer(time_left) and time_left <= time_owed do
-    {:error, :timeout}
-  end
-
-  defp recv_ack(state, {time_left, time_owed}, buffer) do
-    {res, elapsed} = do_recv(state, 0, time_left)
-
-    case res do
-      {:ok, reply} ->
-        new_buf = buffer <> reply
-        check = byte_size(new_buf) - 3
-
-        case new_buf do
-          <<@header, _ack::binary-size(check), @trailer>> ->
-            {:ok, new_buf}
-
-          <<@header, _rest::binary>> ->
-            time_credit = update_recv_time_credit(time_left, time_owed + elapsed)
-            recv_ack(state, time_credit, new_buf)
-
-          _ ->
-            {:error, :invalid_reply}
-        end
-
-      {:error, _} = err ->
-        err
-    end
-  end
-
-  defp do_recv(state, length, :infinity) do
-    res = state.tcp.recv(state.socket, length, :infinity)
-    {res, 0}
-  end
-
-  defp do_recv(state, length, timeout) do
-    timeout_in_ms = System.convert_time_unit(timeout, :microsecond, :millisecond)
-    t1 = System.monotonic_time(:microsecond)
-    res = state.tcp.recv(state.socket, length, timeout_in_ms)
-    t2 = System.monotonic_time(:microsecond)
-    {res, t2 - t1}
-  end
-
-  defp update_recv_time_credit(:infinity, _), do: {:infinity, 0}
-
-  defp update_recv_time_credit(time_left, time_spent) do
-    time_charged = div(time_spent, 1000) * 1000
-    time_owed = time_spent - time_charged
-    {time_left - time_charged, time_owed}
-  end
-
-  defp stop_connection(%State{} = state, error, context) do
-    if state.socket != nil do
+    {:error, new_error(get_context(data), reason)}
+    |> reply_to_caller(data)
+    |> stop_connection(reason, "closing connection to cleanup")
+    |> tap(fn data ->
       telemetry(
         :status,
-        %{status: :disconnected, error: format_error(error), context: context},
-        state
+        %{status: :disconnected, error: format_error(reason)},
+        data
       )
+    end)
+  end
 
-      state.tcp.close(state.socket)
+  defp reply_cleanup(%State{} = data) do
+    data
+    |> Map.put(:caller, nil)
+    |> Map.put(:receive_buffer, [])
+    |> Map.put(:last_byte_received, nil)
+  end
+
+  @doc false
+  def terminate(reason = :normal, data) do
+    Logger.debug("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
+    stop_connection(data, reason, "process terminated")
+  end
+
+  def terminate(reason, data) do
+    Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
+    stop_connection(data, reason, "process terminated")
+  end
+
+  defp maybe_close(reason, %{close_on_recv_error: true, context: context} = data) do
+    stop_connection(data, reason, context)
+  end
+
+  defp maybe_close(_reason, data), do: data
+
+  defp stop_connection(%State{socket: nil} = data, _error, _context) do
+    data
+  end
+
+  defp stop_connection(%State{socket: socket, tcp: tcp} = data, error, context) do
+    telemetry(
+      :status,
+      %{status: :disconnected, error: format_error(error), context: context},
+      data
+    )
+
+    Logger.debug("Stopping connection: #{format_error(error)}")
+
+    if error in [:timeout, :unexpected_packet_received] do
+      :ok = :inet.setopts(socket, linger: {true, 0})
+      tcp.shutdown(socket, :read_write)
+    else
+      tcp.close(socket)
     end
 
-    ensure_pending_reconnect_cancelled(state)
+    data
+    |> Map.put(:socket, nil)
+    |> Map.put(:tcp_error, error)
   end
 
-  defp ensure_pending_reconnect_cancelled(%State{pending_reconnect: nil} = state), do: state
+  defp backoff_succeed(%State{backoff: nil} = data), do: data
 
-  defp ensure_pending_reconnect_cancelled(%State{pending_reconnect: ref} = state) do
-    :ok = Process.cancel_timer(ref, info: false)
-    %{state | pending_reconnect: nil}
-  end
-
-  defp backoff_succeed(%State{backoff: nil} = state), do: state
-
-  defp backoff_succeed(%State{backoff: backoff} = state) do
+  defp backoff_succeed(%State{backoff: backoff} = data) do
     {_, new_backoff} = :backoff.succeed(backoff)
-    %{state | backoff: new_backoff}
+    %{data | backoff: new_backoff}
   end
 
-  defp attempt_connection(%State{} = state) do
-    telemetry(:status, %{status: :connecting}, state)
-    opts = [:binary, {:packet, 0}, {:active, false}] ++ state.socket_opts ++ state.tls_opts
+  defp attempt_connection(%State{} = data) do
+    telemetry(:status, %{status: :connecting}, data)
+    opts = fixed_socket_opts() ++ data.socket_opts ++ data.tls_opts
 
-    case state.tcp.connect(state.address, state.port, opts, 2000) do
+    case data.tcp.connect(data.address, data.port, opts, 2000) do
       {:ok, socket} ->
-        state1 =
-          state
-          |> ensure_pending_reconnect_cancelled()
+        data1 =
+          data
           |> backoff_succeed()
 
-        telemetry(:status, %{status: :connected}, state1)
-        %{state1 | socket: socket, connect_failure: nil}
+        telemetry(:status, %{status: :connected}, data1)
+        {:ok, %{data1 | socket: socket, tcp_error: nil}}
 
       {:error, reason} ->
         message = format_error(reason)
-        Logger.error(fn -> "Error connecting to #{state.socket_address} => #{message}" end)
+        Logger.error(fn -> "Error connecting to #{data.socket_address} => #{message}" end)
 
         telemetry(
           :status,
           %{status: :disconnected, error: format_error(reason), context: "connect failure"},
-          state
+          data
         )
 
-        state
-        |> maintain_reconnect_timer()
-        |> Map.put(:connect_failure, reason)
+        {:error,
+         data
+         |> maybe_update_reconnection_timeout()
+         |> Map.put(:tcp_error, reason)}
     end
   end
 
-  defp maintain_reconnect_timer(%{pending_reconnect: ref} = state) when is_reference(ref),
-    do: state
-
-  defp maintain_reconnect_timer(%{backoff: nil} = state) do
-    ref = Process.send_after(self(), :timeout, state.auto_reconnect_interval)
-
-    %State{state | pending_reconnect: ref}
+  defp maybe_update_reconnection_timeout(%State{backoff: nil} = data) do
+    data
   end
 
-  defp maintain_reconnect_timer(%{backoff: backoff} = state) do
-    seconds =
-      backoff
-      |> :backoff.get()
-      |> :timer.seconds()
-
-    ref = Process.send_after(self(), :timeout, seconds)
+  defp maybe_update_reconnection_timeout(%State{backoff: backoff} = data) do
     {_, new_backoff} = :backoff.fail(backoff)
-
-    %State{state | pending_reconnect: ref, backoff: new_backoff}
+    %{data | backoff: new_backoff}
   end
 
   defp telemetry(_event_name, _measurements, %State{telemetry_module: nil} = _metadata) do
@@ -654,11 +799,21 @@ defmodule MLLP.Client do
     opts
   end
 
-  @default_opts %{
-    telemetry_module: MLLP.DefaultTelemetry,
-    tls_opts: [],
-    socket_opts: [send_timeout: 60_000]
-  }
+  def default_opts() do
+    %{
+      telemetry_module: MLLP.DefaultTelemetry,
+      tls_opts: [],
+      socket_opts: default_socket_opts()
+    }
+  end
+
+  def default_socket_opts() do
+    [send_timeout: 60_000, send_timeout_close: true]
+  end
+
+  def fixed_socket_opts() do
+    [:binary, {:packet, 0}, {:active, true}]
+  end
 
   @default_send_opts %{
     reply_timeout: 60_000
@@ -681,10 +836,10 @@ defmodule MLLP.Client do
 
     send_opts = Map.merge(@default_send_opts, send_opts)
 
-    socket_opts = Keyword.merge(@default_opts[:socket_opts], opts[:socket_opts] || [])
+    socket_opts = Keyword.merge(default_socket_opts(), opts[:socket_opts] || [])
 
     opts
-    |> Map.merge(@default_opts)
+    |> Map.merge(default_opts())
     |> Map.put_new(:tcp, socket_module)
     |> Map.put(:pid, self())
     |> Map.put(:tls_opts, opts.tls)
@@ -709,12 +864,24 @@ defmodule MLLP.Client do
     Ack.verify_ack_against_message(unwrapped_message, ack)
   end
 
+  defp new_error(context, %MLLP.Client.Error{} = error) do
+    Map.put(error, :context, context)
+  end
+
   defp new_error(context, error) do
     %MLLP.Client.Error{
       reason: error,
       context: context,
       message: format_error(error)
     }
+  end
+
+  defp get_context(%State{context: nil}) do
+    :unknown
+  end
+
+  defp get_context(%State{context: context}) do
+    context
   end
 
   defp normalize_address!({_, _, _, _} = addr), do: addr

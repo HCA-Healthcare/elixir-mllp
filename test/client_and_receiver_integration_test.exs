@@ -26,7 +26,7 @@ defmodule ClientAndReceiverIntegrationTest do
     [ack: ack, port: port, transport_opts: transport_opts, allowed_clients: allowed_clients]
   end
 
-  describe "Supervsion" do
+  describe "Supervision" do
     test "successfully starts up under a supervisor using a child spec" do
       port = 8999
       transport_opts = %{num_acceptors: 1, max_connections: 1, socket_opts: [delay_send: true]}
@@ -43,11 +43,11 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
       capture_log(fn ->
-        assert {:ok, _, _ack} =
-                 MLLP.Client.send(
-                   client_pid,
-                   HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
-                 )
+        {:ok, _, _ack} =
+          MLLP.Client.send(
+            client_pid,
+            HL7.Message.new(HL7.Examples.wikipedia_sample_hl7())
+          )
       end)
     end
 
@@ -108,10 +108,10 @@ defmodule ClientAndReceiverIntegrationTest do
       assert MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
     end
 
     test "without a listener" do
@@ -120,14 +120,14 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
-      exp_err = %Error{context: :connect, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, "Eh?")
     end
 
@@ -137,23 +137,23 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       MLLP.Client.reconnect(client_pid)
       assert MLLP.Client.is_connected?(client_pid)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
     end
 
     test "with reconnecting" do
@@ -162,17 +162,33 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
       assert Process.alive?(client_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       {:ok, %{pid: receiver_pid}} =
         MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
 
       assert Process.alive?(receiver_pid)
 
-      assert MLLP.Client.is_connected?(client_pid) == false
+      refute MLLP.Client.is_connected?(client_pid)
 
       MLLP.Client.reconnect(client_pid)
       assert MLLP.Client.is_connected?(client_pid)
+    end
+
+    test "detection of disconnected receiver" do
+      port = 8147
+
+      {:ok, %{pid: _receiver_pid}} =
+        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+
+      {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
+
+      assert MLLP.Client.is_connected?(client_pid)
+
+      MLLP.Receiver.stop(port)
+      :timer.sleep(10)
+
+      refute MLLP.Client.is_connected?(client_pid)
     end
   end
 
@@ -185,11 +201,11 @@ defmodule ClientAndReceiverIntegrationTest do
 
       payload = "A simple message"
 
-      exp_err = %Error{context: :connect, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, payload)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
-      assert Process.alive?(client_pid) == false
+      refute Process.alive?(client_pid)
     end
 
     test "with a receiver that stops before the send" do
@@ -203,12 +219,15 @@ defmodule ClientAndReceiverIntegrationTest do
       assert MLLP.Client.is_connected?(client_pid)
 
       MLLP.Receiver.stop(port)
-      assert Process.alive?(receiver_pid) == false
+      refute Process.alive?(receiver_pid)
 
-      assert match?(
-               {:error, %Error{context: _, message: "connection closed"}},
-               MLLP.Client.send(client_pid, "Simple message")
-             )
+      {:error, %Error{context: context, message: message}} =
+        MLLP.Client.send(client_pid, "Simple message")
+
+      assert context in [:send, :recv]
+      assert message in [MLLP.Client.format_error(:closed), MLLP.Client.format_error(:einval)]
+
+      refute MLLP.Client.is_connected?(client_pid)
     end
 
     test "with a larger message" do
@@ -242,15 +261,12 @@ defmodule ClientAndReceiverIntegrationTest do
   end
 
   describe "timeout behaviour" do
-    test "gen server call times out" do
-      port = 8153
+    setup do
+      Logger.configure(level: :debug)
+      setup_receiver()
+    end
 
-      {:ok, %{pid: _receiver_pid}} =
-        MLLP.Receiver.start(
-          port: port,
-          dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher
-        )
-
+    test "gen server call times out", %{port: port} = _ctx do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port, auto_reconnect_interval: 3)
 
       assert catch_exit(
@@ -262,16 +278,12 @@ defmodule ClientAndReceiverIntegrationTest do
       assert Process.alive?(client_pid)
     end
 
-    test "does not open additional sockets on reconnect" do
-      port = 8154
-
-      {:ok, %{pid: _receiver_pid}} =
-        MLLP.Receiver.start(
-          port: port,
-          dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher
+    test "does not open additional sockets on reconnect", %{port: port} = _ctx do
+      {:ok, client_pid} =
+        MLLP.Client.start_link({127, 0, 0, 1}, port,
+          auto_reconnect_interval: 3,
+          close_on_recv_error: false
         )
-
-      {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port, auto_reconnect_interval: 3)
 
       capture_log(fn ->
         {:error, _} = MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
@@ -282,6 +294,18 @@ defmodule ClientAndReceiverIntegrationTest do
       assert Process.alive?(client_pid)
 
       assert Enum.count(open_ports_for_pid(client_pid)) == 1
+    end
+
+    test "closes the socket, if close_on_recv_error set to true", %{port: port} = _ctx do
+      {:ok, client_pid} =
+        MLLP.Client.start_link({127, 0, 0, 1}, port,
+          auto_reconnect_interval: 3,
+          close_on_recv_error: true
+        )
+
+      {:error, _} = MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
+      Process.sleep(10)
+      assert Enum.count(open_ports_for_pid(client_pid)) == 0
     end
   end
 
@@ -332,7 +356,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
 
-      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :connect}} =
+      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :send}} =
                MLLP.Client.send(
                  client_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
@@ -371,13 +395,14 @@ defmodule ClientAndReceiverIntegrationTest do
     test "can restrict client if client IP is not allowed", ctx do
       {:ok, client_pid} = MLLP.Client.start_link("localhost", ctx.port)
 
-      exp = %Error{context: :recv, reason: :closed, message: "connection closed"}
+      {:error, error} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
 
-      assert {:error, ^exp} =
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      assert error.context in [:send, :recv]
+      assert error.reason in [:closed, :einval]
     end
 
     @tag allowed_clients: ["127.0.0.0", "localhost"]
@@ -587,5 +612,22 @@ defmodule ClientAndReceiverIntegrationTest do
       info = Port.info(p)
       Keyword.get(info, :name) == 'tcp_inet' and Keyword.get(info, :connected) == pid
     end)
+  end
+
+  defp setup_receiver() do
+    port = 4090
+
+    {:ok, receiver} =
+      MLLP.Receiver.start(port: port, dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher)
+
+    on_exit(fn ->
+      try do
+        MLLP.Receiver.stop(port)
+      rescue
+        _err -> :ok
+      end
+    end)
+
+    %{receiver: receiver, port: port}
   end
 end
