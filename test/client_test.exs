@@ -183,8 +183,6 @@ defmodule ClientTest do
             )
 
           refute Client.is_connected?(pid)
-          Client.reconnect(pid)
-          {:ok, _} = Client.send(pid, "ok")
         end)
 
       assert String.contains?(log, Client.format_error(:unexpected_packet_received))

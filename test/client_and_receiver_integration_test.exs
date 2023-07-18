@@ -261,15 +261,12 @@ defmodule ClientAndReceiverIntegrationTest do
   end
 
   describe "timeout behaviour" do
-    test "gen server call times out" do
-      port = 8153
+    setup do
+      Logger.configure(level: :debug)
+      setup_receiver()
+    end
 
-      {:ok, %{pid: _receiver_pid}} =
-        MLLP.Receiver.start(
-          port: port,
-          dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher
-        )
-
+    test "gen server call times out", %{port: port} = _ctx do
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port, auto_reconnect_interval: 3)
 
       assert catch_exit(
@@ -281,16 +278,12 @@ defmodule ClientAndReceiverIntegrationTest do
       assert Process.alive?(client_pid)
     end
 
-    test "does not open additional sockets on reconnect" do
-      port = 8154
-
-      {:ok, %{pid: _receiver_pid}} =
-        MLLP.Receiver.start(
-          port: port,
-          dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher
+    test "does not open additional sockets on reconnect", %{port: port} = _ctx do
+      {:ok, client_pid} =
+        MLLP.Client.start_link({127, 0, 0, 1}, port,
+          auto_reconnect_interval: 3,
+          close_on_recv_error: false
         )
-
-      {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port, auto_reconnect_interval: 3)
 
       capture_log(fn ->
         {:error, _} = MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
@@ -301,6 +294,18 @@ defmodule ClientAndReceiverIntegrationTest do
       assert Process.alive?(client_pid)
 
       assert Enum.count(open_ports_for_pid(client_pid)) == 1
+    end
+
+    test "closes the socket, if close_on_recv_error set to true", %{port: port} = _ctx do
+      {:ok, client_pid} =
+        MLLP.Client.start_link({127, 0, 0, 1}, port,
+          auto_reconnect_interval: 3,
+          close_on_recv_error: true
+        )
+
+      {:error, _} = MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
+      Process.sleep(10)
+      assert Enum.count(open_ports_for_pid(client_pid)) == 0
     end
   end
 
@@ -607,5 +612,22 @@ defmodule ClientAndReceiverIntegrationTest do
       info = Port.info(p)
       Keyword.get(info, :name) == 'tcp_inet' and Keyword.get(info, :connected) == pid
     end)
+  end
+
+  defp setup_receiver() do
+    port = 4090
+
+    {:ok, receiver} =
+      MLLP.Receiver.start(port: port, dispatcher: ClientAndReceiverIntegrationTest.TestDispatcher)
+
+    on_exit(fn ->
+      try do
+        MLLP.Receiver.stop(port)
+      rescue
+        _err -> :ok
+      end
+    end)
+
+    %{receiver: receiver, port: port}
   end
 end

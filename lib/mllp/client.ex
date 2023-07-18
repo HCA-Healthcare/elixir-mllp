@@ -536,7 +536,7 @@ defmodule MLLP.Client do
   end
 
   def receiving(:state_timeout, :receive_timeout, data) do
-    {:next_state, :connected, reply_to_caller({:error, :timeout}, data)}
+    {:next_state, :connected, reply_to_caller({:error, :timeout}, maybe_close(:timeout, data))}
   end
 
   def receiving(:info, {transport, socket, incoming}, %{socket: socket} = data)
@@ -721,7 +721,7 @@ defmodule MLLP.Client do
 
     Logger.debug("Stopping connection: #{format_error(error)}")
 
-    if error == :unexpected_packet_received do
+    if error in [:timeout, :unexpected_packet_received] do
       :ok = :inet.setopts(socket, linger: {true, 0})
       tcp.shutdown(socket, :read_write)
     else
