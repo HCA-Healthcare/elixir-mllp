@@ -414,9 +414,9 @@ defmodule MLLP.Client do
     end
   end
 
-  def disconnected(:state_timeout, :reconnect, data) do
+  def disconnected(:state_timeout, :reconnect, _data) do
     actions = [{:next_event, :internal, :connect}]
-    {:keep_state, data, actions}
+    {:keep_state_and_data, actions}
   end
 
   def disconnected({:call, from}, :reconnect, _data) do
@@ -425,8 +425,12 @@ defmodule MLLP.Client do
   end
 
   def disconnected({:call, from}, {:send, _message, _options}, data) do
-    actions = [{:reply, from, {:error, new_error(:send, data.tcp_error)}}]
-    {:keep_state_and_data, actions}
+    actions = [
+      {:reply, from, {:error, new_error(:send, data.tcp_error)}},
+      {:next_event, :internal, :connect}
+    ]
+
+    {:keep_state, maybe_reset_reconnection_timeout(data), actions}
   end
 
   def disconnected({:call, from}, :is_connected, _data) do
@@ -733,13 +737,6 @@ defmodule MLLP.Client do
     |> Map.put(:tcp_error, error)
   end
 
-  defp backoff_succeed(%State{backoff: nil} = data), do: data
-
-  defp backoff_succeed(%State{backoff: backoff} = data) do
-    {_, new_backoff} = :backoff.succeed(backoff)
-    %{data | backoff: new_backoff}
-  end
-
   defp attempt_connection(%State{} = data) do
     telemetry(:status, %{status: :connecting}, data)
     opts = fixed_socket_opts() ++ data.socket_opts ++ data.tls_opts
@@ -748,7 +745,7 @@ defmodule MLLP.Client do
       {:ok, socket} ->
         data1 =
           data
-          |> backoff_succeed()
+          |> maybe_reset_reconnection_timeout()
 
         telemetry(:status, %{status: :connected}, data1)
         {:ok, %{data1 | socket: socket, tcp_error: nil}}
@@ -776,6 +773,13 @@ defmodule MLLP.Client do
 
   defp maybe_update_reconnection_timeout(%State{backoff: backoff} = data) do
     {_, new_backoff} = :backoff.fail(backoff)
+    %{data | backoff: new_backoff}
+  end
+
+  defp maybe_reset_reconnection_timeout(%State{backoff: nil} = data), do: data
+
+  defp maybe_reset_reconnection_timeout(%State{backoff: backoff} = data) do
+    {_, new_backoff} = :backoff.succeed(backoff)
     %{data | backoff: new_backoff}
   end
 
@@ -808,7 +812,7 @@ defmodule MLLP.Client do
   end
 
   def default_socket_opts() do
-    [send_timeout: 60_000, send_timeout_close: true]
+    [send_timeout: 60_000, send_timeout_close: true, keepalive: true]
   end
 
   def fixed_socket_opts() do

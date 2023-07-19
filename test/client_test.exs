@@ -152,6 +152,27 @@ defmodule ClientTest do
 
       assert match?({:backoff, 1, 180, 2, :normal, _, _}, state.backoff)
     end
+
+    test "the backoff will be reset every time 'send' call fails",
+         %{client: client, port: port} = _ctx do
+      # Stop the receiver...
+      MLLP.Receiver.stop(port)
+
+      # ... and wait for backoff to change; the delay below would set next backoff timeout to 4.
+      Process.sleep(3000 + 100)
+
+      {_fsm_state, state} = :sys.get_state(client)
+
+      {:backoff, 1, 180, backoff_timeout, :normal, _, _} = state.backoff
+      assert backoff_timeout == 4
+
+      {:error, _} = MLLP.Client.send(client, "no connection, this should fail")
+
+      {_fsm_state, state} = :sys.get_state(client)
+      {:backoff, 1, 180, backoff_timeout, :normal, _, _} = state.backoff
+
+      assert backoff_timeout == 2
+    end
   end
 
   describe "unexpected messages" do
@@ -182,11 +203,17 @@ defmodule ClientTest do
               "this should fail as the connection will be dropped on unexpected packet"
             )
 
-          refute Client.is_connected?(pid)
+          ## Give it some time to reconnect
+          Process.sleep(10)
         end)
 
       assert String.contains?(log, Client.format_error(:unexpected_packet_received))
       assert String.contains?(log, "Connection closed")
+      assert String.contains?(log, "Connection established")
+      ## The connection had been closed, then re-established
+      {start_closed, _} = :binary.match(log, "Connection closed")
+      {start_established, _} = :binary.match(log, "Connection established")
+      assert start_closed < start_established
     end
   end
 
