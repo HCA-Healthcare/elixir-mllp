@@ -286,12 +286,14 @@ defmodule ClientAndReceiverIntegrationTest do
         )
 
       capture_log(fn ->
-        {:error, _} = MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
+        {:error, %MLLP.Client.Error{reason: :timeout}} =
+          MLLP.Client.send(client_pid, "MSH|NOREPLY", %{reply_timeout: 1})
       end)
 
       # Wait for reconnect timer
       Process.sleep(10)
-      assert Process.alive?(client_pid)
+      assert MLLP.Client.is_connected?(client_pid)
+      {:ok, _} = MLLP.Client.send(client_pid, "MSH|REPLY")
 
       assert Enum.count(open_ports_for_pid(client_pid)) == 1
     end
