@@ -243,8 +243,13 @@ defmodule MLLP.Receiver do
 
         {tls_options, options1} ->
           verify_peer = Keyword.get(tls_options, :verify)
+          ssl_transport = Keyword.get(tls_options, :ssl_transport, :ranch_ssl)
 
-          {:ranch_ssl, Keyword.merge(get_peer_options(verify_peer), tls_options), options1}
+          {ssl_transport,
+           Keyword.merge(
+             get_peer_options(verify_peer),
+             tls_options |> Keyword.delete(:ssl_transport)
+           ), options1}
       end
 
     socket_opts = get_socket_options(transport_opts, port) ++ tls_options1
@@ -338,6 +343,7 @@ defmodule MLLP.Receiver do
 
   def handle_info({message, socket, data}, state) when message in [:tcp, :ssl] do
     Logger.debug(fn -> "Receiver received data: [#{inspect(data)}]." end)
+
     framing_context = handle_received_data(socket, data, state.framing_context, state.transport)
     {:noreply, %{state | framing_context: framing_context}}
   end
