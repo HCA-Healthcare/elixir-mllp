@@ -377,6 +377,48 @@ defmodule ClientAndReceiverIntegrationTest do
     end
   end
 
+  describe "tls handshake failure logging" do
+    setup do
+      port = 4040
+
+      transport_opts = %{
+        tls: [
+          cacertfile: "tls/root-ca/ca_certificate.pem",
+          verify: :verify_none,
+          certfile: "tls/server/server_certificate.pem",
+          keyfile: "tls/server/private_key.pem",
+          ssl_transport: MLLP.TLS.HandshakeLoggingTransport
+        ]
+      }
+
+      {:ok, %{pid: receiver_pid}} =
+        MLLP.Receiver.start(
+          port: port,
+          dispatcher: MLLP.EchoDispatcher,
+          transport_opts: transport_opts
+        )
+
+      client_tls_options = [
+        verify: :verify_peer,
+        cacertfile: "tls/root-ca/ca_certificate.pem"
+      ]
+
+      on_exit(fn -> MLLP.Receiver.stop(port) end)
+
+      [receiver_pid: receiver_pid, client_tls_options: client_tls_options, port: port]
+    end
+
+    test "handshake fails", ctx do
+      assert capture_log(fn ->
+               {:ok, client_pid} =
+                 MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
+
+               Process.sleep(10)
+               refute MLLP.Client.is_connected?(client_pid)
+             end) =~ "Handshake failure on connection attempt from {127, 0, 0, 1}"
+    end
+  end
+
   describe "ip restriction" do
     setup ctx do
       {:ok, %{pid: _receiver_pid}} =
