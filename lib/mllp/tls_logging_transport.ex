@@ -1,7 +1,7 @@
 defmodule MLLP.TLS.HandshakeLoggingTransport do
   @behaviour :ranch_transport
 
-  require Logger
+  import MLLP.Utils
 
   @impl true
   defdelegate name(), to: :ranch_ssl
@@ -94,10 +94,10 @@ defmodule MLLP.TLS.HandshakeLoggingTransport do
   end
 
   defp log_peer({nil, peername_error}) do
-    Logger.error("Handshake failure; peer is undetected (#{inspect(peername_error)})")
+    log(:error, "Handshake failure; peer is undetected (#{inspect(peername_error)})")
   end
 
   defp log_peer({ip, port}) do
-    Logger.error("Handshake failure on connection attempt from #{inspect(ip)}:#{inspect(port)}")
+    log(:error, "Handshake failure on connection attempt from #{inspect(ip)}:#{inspect(port)}")
   end
 end

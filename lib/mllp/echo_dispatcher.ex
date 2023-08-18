@@ -2,12 +2,12 @@ defmodule MLLP.EchoDispatcher do
   @moduledoc """
   Echo dispatcher informs the user that a dispatch function was not set and returns an application_accept
   or application_reject depending on if the message is valid (String) or not. Useful for debugging and serves
-  as an example for writing your own dispatcher. 
+  as an example for writing your own dispatcher.
   """
 
-  require Logger
-
   @behaviour MLLP.Dispatcher
+
+  import MLLP.Utils
 
   @spec dispatch(:mllp_hl7 | :mllp_unknown, binary(), MLLP.FramingContext.t()) ::
           {:ok, MLLP.FramingContext.t()}
@@ -17,7 +17,8 @@ defmodule MLLP.EchoDispatcher do
   end
 
   def dispatch(:mllp_hl7, message, state) when is_binary(message) do
-    Logger.info(
+    log(
+      :info,
       "The EchoDispatcher simply logs and discards messages. Message type: :mllp_hl7 Message: #{message}"
     )
 

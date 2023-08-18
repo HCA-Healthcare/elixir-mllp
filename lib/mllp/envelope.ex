@@ -16,7 +16,8 @@ defmodule MLLP.Envelope do
       <EB><CR>
 
   """
-  require Logger
+
+  import MLLP.Utils
 
   # ^K - VT (Vertical Tab)
   @sb <<0x0B>>
@@ -87,7 +88,7 @@ defmodule MLLP.Envelope do
   @spec wrap_message(binary()) :: binary() | no_return
   def wrap_message(<<11, _::binary>> = message) do
     if String.ends_with?(message, @ending) do
-      Logger.debug("MLLP Envelope performed unnecessary wrapping of wrapped message")
+      log(:debug, "MLLP Envelope performed unnecessary wrapping of wrapped message")
       message
     else
       raise(ArgumentError, message: "MLLP Envelope cannot wrap a partially wrapped message")
@@ -119,7 +120,7 @@ defmodule MLLP.Envelope do
     if String.ends_with?(message, @ending) do
       raise(ArgumentError, message: "cannot unwrap a partially wrapped message")
     else
-      Logger.debug("MLLP Envelope performed unnecessary unwrapping of unwrapped message")
+      log(:debug, "MLLP Envelope performed unnecessary unwrapping of unwrapped message")
       message
     end
   end

@@ -1,6 +1,4 @@
 defmodule MLLP.Peer do
-  require Logger
-
   @type t :: %{
           :transport => :ranch_tcp | :ranch_ssl,
           :socket => :ranch_transport.socket(),
