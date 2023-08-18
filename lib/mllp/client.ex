@@ -629,7 +629,7 @@ defmodule MLLP.Client do
         reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
 
       false ->
-        log(:debug, "Client #{inspect(self())} received a MLLP fragment: #{reply}")
+        log(:debug, "Client #{inspect(self())} received a MLLP fragment: #{inspect(reply)}")
 
         data
         |> Map.put(:receive_buffer, new_buf)
