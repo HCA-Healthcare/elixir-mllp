@@ -1,15 +1,15 @@
 defmodule MLLP.Utils do
   require Logger
-  @log_prefix "ELIXIR-MLLP :: "
-  def log(level, message) do
-    Logger.log(level, format_message(message))
+
+  def log(level, message, prefix \\ nil) do
+    Logger.log(level, format_message(message, prefix))
   end
 
-  defp format_message(message) when is_binary(message) do
-    @log_prefix <> message
-  end
-
-  defp format_message(message) do
-    @log_prefix <> inspect(message)
+  defp format_message(message, prefix) do
+    if prefix do
+      "#{inspect(prefix)} :: " <> message
+    else
+      message
+    end
   end
 end

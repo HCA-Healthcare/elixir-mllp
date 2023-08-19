@@ -177,6 +177,8 @@ defmodule MLLP.Client do
 
   alias __MODULE__, as: State
 
+  @log_prefix __MODULE__
+
   ## API
   @doc false
   @spec format_error(term()) :: String.t()
@@ -398,7 +400,7 @@ defmodule MLLP.Client do
   end
 
   def disconnected(:enter, current_state, data) when current_state in [:connected, :receiving] do
-    log(:error, "Connection closed")
+    log(:error, "Connection closed", @log_prefix)
     {:keep_state, data, reconnect_action(data)}
   end
 
@@ -420,7 +422,7 @@ defmodule MLLP.Client do
   end
 
   def disconnected({:call, from}, :reconnect, _data) do
-    log(:debug, "Request to reconnect accepted")
+    log(:debug, "Request to reconnect accepted", @log_prefix)
     {:keep_state_and_data, [{:reply, from, :ok}, {:next_event, :internal, :connect}]}
   end
 
@@ -445,7 +447,7 @@ defmodule MLLP.Client do
   #### Connected state ####
   #########################
   def connected(:enter, :disconnected, _data) do
-    log(:debug, "Connection established")
+    log(:debug, "Connection established", @log_prefix)
     :keep_state_and_data
   end
 
@@ -531,7 +533,7 @@ defmodule MLLP.Client do
   #### Receiving state ####
   #########################
   def receiving(:enter, :connected, _data) do
-    log(:debug, "Waiting for response...")
+    log(:debug, "Waiting for response...", @log_prefix)
     :keep_state_and_data
   end
 
@@ -588,7 +590,8 @@ defmodule MLLP.Client do
   defp unexpected_message(state, event, message) do
     log(
       :warning,
-      "Event: #{inspect(event)} in state #{state}. Unknown message received => #{inspect(message)}"
+      "Event: #{inspect(event)} in state #{state}. Unknown message received => #{inspect(message)}",
+      @log_prefix
     )
 
     :keep_state_and_data
@@ -621,15 +624,19 @@ defmodule MLLP.Client do
 
     case trailer_check(reply, last_byte) do
       :data_after_trailer ->
-        log(:error, "Client #{inspect(self())} received data following the trailer")
+        log(:error, "Client #{inspect(self())} received data following the trailer", @log_prefix)
         reply_to_caller({:error, :data_after_trailer}, data)
 
       true ->
-        log(:debug, "Client #{inspect(self())} received a full MLLP!")
+        log(:debug, "Client #{inspect(self())} received a full MLLP!", @log_prefix)
         reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
 
       false ->
-        log(:debug, "Client #{inspect(self())} received a MLLP fragment: #{inspect(reply)}")
+        log(
+          :debug,
+          "Client #{inspect(self())} received a MLLP fragment: #{inspect(reply)}",
+          @log_prefix
+        )
 
         data
         |> Map.put(:receive_buffer, new_buf)
@@ -675,7 +682,7 @@ defmodule MLLP.Client do
 
   ## Handle transport errors
   defp handle_error(reason, data) do
-    log(:error, "Error: #{inspect(reason)}, data: #{inspect(data)}")
+    log(:error, "Error: #{inspect(reason)}, data: #{inspect(data)}", @log_prefix)
 
     {:error, new_error(get_context(data), reason)}
     |> reply_to_caller(data)
@@ -698,12 +705,22 @@ defmodule MLLP.Client do
 
   @doc false
   def terminate(reason = :normal, data) do
-    log(:debug, "Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
+    log(
+      :debug,
+      "Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}",
+      @log_prefix
+    )
+
     stop_connection(data, reason, "process terminated")
   end
 
   def terminate(reason, data) do
-    log(:error, "Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
+    log(
+      :error,
+      "Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}",
+      @log_prefix
+    )
+
     stop_connection(data, reason, "process terminated")
   end
 
@@ -724,7 +741,7 @@ defmodule MLLP.Client do
       data
     )
 
-    log(:debug, "Stopping connection: #{format_error(error)}")
+    log(:debug, "Stopping connection: #{format_error(error)}", @log_prefix)
 
     if error in [:timeout, :unexpected_packet_received] do
       :ok = :inet.setopts(socket, linger: {true, 0})
@@ -753,7 +770,7 @@ defmodule MLLP.Client do
 
       {:error, reason} ->
         message = format_error(reason)
-        log(:error, fn -> "Error connecting to #{data.socket_address} => #{message}" end)
+        log(:error, "Error connecting to #{data.socket_address} => #{message}", @log_prefix)
 
         telemetry(
           :status,

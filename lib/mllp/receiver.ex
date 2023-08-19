@@ -45,6 +45,8 @@ defmodule MLLP.Receiver do
 
   @behaviour :ranch_protocol
 
+  @log_prefix __MODULE__
+
   defstruct socket: nil,
             transport: nil,
             buffer: "",
@@ -236,7 +238,8 @@ defmodule MLLP.Receiver do
         {nil, options1} ->
           log(
             :warning,
-            "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
+            "Starting listener on a non secured socket, data will be passed over unencrypted connection!",
+            MLLP.Receiver
           )
 
           {:ranch_tcp, [], options1}
@@ -334,7 +337,11 @@ defmodule MLLP.Receiver do
         :gen_server.enter_loop(__MODULE__, [], state)
 
       {:error, error} ->
-        log(:warning, "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}")
+        log(
+          :warning,
+          "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}",
+          @log_prefix
+        )
 
         {:stop,
          %{message: "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}"}}
@@ -342,29 +349,29 @@ defmodule MLLP.Receiver do
   end
 
   def handle_info({message, socket, data}, state) when message in [:tcp, :ssl] do
-    log(:debug, fn -> "Receiver received data: [#{inspect(data)}]." end)
+    log(:debug, "Receiver received data: [#{inspect(data)}].", @log_prefix)
 
     framing_context = handle_received_data(socket, data, state.framing_context, state.transport)
     {:noreply, %{state | framing_context: framing_context}}
   end
 
   def handle_info({message, _socket}, state) when message in [:tcp_closed, :ssl_closed] do
-    log(:debug, "MLLP.Receiver tcp_closed.")
+    log(:debug, "MLLP.Receiver tcp_closed.", @log_prefix)
     {:stop, :normal, state}
   end
 
   def handle_info({message, _, reason}, state) when message in [:tcp_error, :tls_error] do
-    log(:error, fn -> "MLLP.Receiver encountered a tcp_error: [#{inspect(reason)}]" end)
+    log(:error, "MLLP.Receiver encountered a tcp_error: [#{inspect(reason)}]", @log_prefix)
     {:stop, reason, state}
   end
 
   def handle_info(:timeout, state) do
-    log(:debug, "Receiver timed out.")
+    log(:debug, "Receiver timed out.", @log_prefix)
     {:stop, :normal, state}
   end
 
   def handle_info(msg, state) do
-    log(:warning, "Unexpected handle_info for msg [#{inspect(msg)}].")
+    log(:warning, "Unexpected handle_info for msg [#{inspect(msg)}].", @log_prefix)
     {:noreply, state}
   end
 
@@ -435,7 +442,8 @@ defmodule MLLP.Receiver do
       error ->
         log(
           :warning,
-          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list"
+          "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list",
+          @log_prefix
         )
 
         nil
