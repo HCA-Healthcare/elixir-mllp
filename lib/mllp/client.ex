@@ -202,7 +202,7 @@ defmodule MLLP.Client do
 
   def format_error(posix) when is_atom(posix) do
     case :inet.format_error(posix) do
-      'unknown POSIX error' ->
+      ~c"unknown POSIX error" ->
         inspect(posix)
 
       char_list ->
@@ -842,8 +842,7 @@ defmodule MLLP.Client do
 
     socket_opts = Keyword.merge(default_socket_opts(), opts[:socket_opts] || [])
 
-    opts
-    |> Map.merge(default_opts())
+    Map.merge(default_opts(), opts)
     |> Map.put_new(:tcp, socket_module)
     |> Map.put(:pid, self())
     |> Map.put(:tls_opts, opts.tls)
