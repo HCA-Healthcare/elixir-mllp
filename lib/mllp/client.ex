@@ -586,7 +586,7 @@ defmodule MLLP.Client do
   ########################################
 
   defp unexpected_message(state, event, message) do
-    Logger.warn(
+    Logger.warning(
       "Event: #{inspect(event)} in state #{state}. Unknown message received => #{inspect(message)}"
     )
 

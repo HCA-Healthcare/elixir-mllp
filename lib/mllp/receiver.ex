@@ -235,7 +235,7 @@ defmodule MLLP.Receiver do
     {transport_module, tls_options1, transport_opts1} =
       case Map.pop(transport_opts, :tls) do
         {nil, options1} ->
-          Logger.warn(
+          Logger.warning(
             "Starting listener on a non secured socket, data will be passed over unencrypted connection!"
           )
 
@@ -334,7 +334,9 @@ defmodule MLLP.Receiver do
         :gen_server.enter_loop(__MODULE__, [], state)
 
       {:error, error} ->
-        Logger.warn("Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}")
+        Logger.warning(
+          "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}"
+        )
 
         {:stop,
          %{message: "Failed to verify client #{inspect(client_info)}, error: #{inspect(error)}"}}
@@ -364,7 +366,7 @@ defmodule MLLP.Receiver do
   end
 
   def handle_info(msg, state) do
-    Logger.warn("Unexpected handle_info for msg [#{inspect(msg)}].")
+    Logger.warning("Unexpected handle_info for msg [#{inspect(msg)}].")
     {:noreply, state}
   end
 
@@ -433,7 +435,7 @@ defmodule MLLP.Receiver do
         address
 
       error ->
-        Logger.warn(
+        Logger.warning(
           "IP/hostname #{inspect(name)} provided is not a valid IP/hostname #{inspect(error)}. It will be filtered from allowed_clients list"
         )
 
