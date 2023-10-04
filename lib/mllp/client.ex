@@ -788,13 +788,21 @@ defmodule MLLP.Client do
   end
 
   defp telemetry(event_name, measurements, %State{telemetry_module: telemetry_module} = metadata) do
-    telemetry_module.execute([:client, event_name], add_timestamps(measurements), metadata)
+    telemetry_module.execute(
+      [:client, event_name],
+      add_timestamps(measurements),
+      filter_metadata(metadata)
+    )
   end
 
   defp add_timestamps(measurements) do
     measurements
     |> Map.put(:monotonic, :erlang.monotonic_time())
     |> Map.put(:utc_datetime, DateTime.utc_now())
+  end
+
+  defp filter_metadata(metadata) do
+    Map.take(metadata, [:address, :port])
   end
 
   defp validate_options(opts) do
