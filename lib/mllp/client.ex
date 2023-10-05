@@ -201,12 +201,15 @@ defmodule MLLP.Client do
   end
 
   def format_error(posix) when is_atom(posix) do
-    case :inet.format_error(posix) do
-      ~c"unknown POSIX error" ->
-        inspect(posix)
+    posix_error_str =
+      posix
+      |> :inet.format_error()
+      |> to_string()
 
-      char_list ->
-        to_string(char_list)
+    if String.starts_with?(posix_error_str, "unknown POSIX error") do
+      inspect(posix)
+    else
+      posix_error_str
     end
   end
 
@@ -539,7 +542,8 @@ defmodule MLLP.Client do
   end
 
   def receiving({:call, from}, {:send, _message, _options}, _data) do
-    {:keep_state_and_data, [{:reply, from, format_reply({:error, :busy_with_other_call}, :sending)}]}
+    {:keep_state_and_data,
+     [{:reply, from, format_reply({:error, :busy_with_other_call}, :sending)}]}
   end
 
   def receiving(:state_timeout, :receive_timeout, data) do
