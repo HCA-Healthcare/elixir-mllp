@@ -263,7 +263,11 @@ defmodule ClientTest do
       message =
         "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|NOTRAILER|P|2.5\rMSA|AA|NOTRAILER\r"
 
-      expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
+      expected_err = %MLLP.Client.Error{
+        context: :receiving,
+        reason: :timeout,
+        message: "timed out"
+      }
 
       log =
         capture_log([level: :debug], fn ->
@@ -313,7 +317,7 @@ defmodule ClientTest do
         "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|DONOTWRAP|P|2.5\rMSA|AA|DONOTWRAP\r"
 
       expected_err = %MLLP.Client.Error{
-        context: :recv,
+        context: :receiving,
         message: "Invalid header received in server acknowledgment",
         reason: :invalid_reply
       }
@@ -328,7 +332,7 @@ defmodule ClientTest do
       message = "This message has a TRAILER_WITHIN - beware!"
 
       expected_err = %MLLP.Client.Error{
-        context: :recv,
+        context: :receiving,
         message: "Data received after trailer",
         reason: :data_after_trailer
       }

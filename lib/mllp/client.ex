@@ -410,7 +410,7 @@ defmodule MLLP.Client do
         {:keep_state, new_state, reconnect_action(new_state)}
 
       :ok ->
-        {:next_state, :connected, new_state}
+        next_state(:connected, new_state)
     end
   end
 
@@ -426,7 +426,7 @@ defmodule MLLP.Client do
 
   def disconnected({:call, from}, {:send, _message, _options}, data) do
     actions = [
-      {:reply, from, {:error, new_error(:send, data.tcp_error)}},
+      {:reply, from, {:error, new_error(:sending, data.tcp_error)}},
       {:next_event, :internal, :connect}
     ]
 
@@ -459,10 +459,13 @@ defmodule MLLP.Client do
 
     case data.tcp.send(data.socket, payload) do
       :ok ->
-        {:next_state, :receiving,
-         data
-         |> Map.put(:context, :recv)
-         |> Map.put(:caller, from), send_action(send_type, from, options, data)}
+        next_state(
+          :receiving,
+          data
+          |> Map.put(:context, :recv)
+          |> Map.put(:caller, from),
+          send_action(send_type, from, options, data)
+        )
 
       {:error, reason} ->
         telemetry(
@@ -470,7 +473,7 @@ defmodule MLLP.Client do
           %{
             status: :disconnected,
             error: format_error(reason),
-            context: "send message failure"
+            context: :sending
           },
           data
         )
@@ -495,7 +498,7 @@ defmodule MLLP.Client do
 
   def connected(:info, {transport_closed, _socket}, data)
       when transport_closed in [:tcp_closed, :ssl_closed] do
-    {:next_state, :disconnected, handle_closed(data)}
+    next_state(:disconnected, handle_closed(data))
   end
 
   def connected(event, unknown, _data) do
@@ -536,28 +539,27 @@ defmodule MLLP.Client do
   end
 
   def receiving({:call, from}, {:send, _message, _options}, _data) do
-    {:keep_state_and_data, [{:reply, from, format_reply({:error, :busy_with_other_call}, :send)}]}
+    {:keep_state_and_data, [{:reply, from, format_reply({:error, :busy_with_other_call}, :sending)}]}
   end
 
   def receiving(:state_timeout, :receive_timeout, data) do
-    {:next_state, :connected, reply_to_caller({:error, :timeout}, maybe_close(:timeout, data))}
+    next_state(:connected, reply_to_caller({:error, :timeout}, maybe_close(:timeout, data)))
   end
 
   def receiving(:info, {transport, socket, incoming}, %{socket: socket} = data)
       when transport in [:tcp, :ssl] do
     new_data = handle_received(incoming, data)
-    next_state = next_after_receiving(new_data)
-    {:next_state, next_state, new_data}
+    next_state(next_after_receiving(new_data), new_data)
   end
 
   def receiving(:info, {transport_closed, socket}, %{socket: socket} = data)
       when transport_closed in [:tcp_closed, :ssl_closed] do
-    {:next_state, :disconnected, handle_closed(data)}
+    next_state(:disconnected, handle_closed(data))
   end
 
   def receiving(:info, {transport_error, socket, reason}, %{socket: socket} = data)
       when transport_error in [:tcp_error, :ssl_error] do
-    {:next_state, :disconnected, handle_error(reason, maybe_close(reason, data))}
+    next_state(:disconnected, handle_error(reason, maybe_close(reason, data)))
   end
 
   def receiving({:call, _from} = event_kind, request, data)
@@ -781,6 +783,10 @@ defmodule MLLP.Client do
   defp maybe_reset_reconnection_timeout(%State{backoff: backoff} = data) do
     {_, new_backoff} = :backoff.succeed(backoff)
     %{data | backoff: new_backoff}
+  end
+
+  defp next_state(state, data, actions \\ []) do
+    {:next_state, state, Map.put(data, :context, state), actions}
   end
 
   defp telemetry(_event_name, _measurements, %State{telemetry_module: nil} = _metadata) do

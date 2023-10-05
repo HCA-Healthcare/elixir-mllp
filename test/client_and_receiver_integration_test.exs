@@ -127,7 +127,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
-      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :sending, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, "Eh?")
     end
 
@@ -201,7 +201,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       payload = "A simple message"
 
-      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :sending, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, payload)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
@@ -224,7 +224,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:error, %Error{context: context, message: message}} =
         MLLP.Client.send(client_pid, "Simple message")
 
-      assert context in [:send, :recv]
+      assert context in [:sending, :receiving]
       assert message in [MLLP.Client.format_error(:closed), MLLP.Client.format_error(:einval)]
 
       refute MLLP.Client.is_connected?(client_pid)
@@ -358,7 +358,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
 
-      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :send}} =
+      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :sending}} =
                MLLP.Client.send(
                  client_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
@@ -445,7 +445,7 @@ defmodule ClientAndReceiverIntegrationTest do
           HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
         )
 
-      assert error.context in [:send, :recv]
+      assert error.context in [:sending, :receiving]
       assert error.reason in [:closed, :einval]
     end
 
