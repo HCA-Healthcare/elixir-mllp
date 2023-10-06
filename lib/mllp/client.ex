@@ -481,7 +481,7 @@ defmodule MLLP.Client do
           data
         )
 
-        error_reply = {:error, new_error(:send, reason)}
+        error_reply = {:error, new_error(:sending, reason)}
         {:keep_state_and_data, [{:reply, from, error_reply}]}
     end
   end

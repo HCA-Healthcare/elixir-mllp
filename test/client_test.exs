@@ -27,8 +27,8 @@ defmodule ClientTest do
 
       assert match?({:ok, _}, MLLP.Client.start_link(:localhost, 9999))
       assert match?({:ok, _}, MLLP.Client.start_link("servera.app.net", 9999))
-      assert match?({:ok, _}, MLLP.Client.start_link('servera.unix.city.net', 9999))
-      assert match?({:ok, _}, MLLP.Client.start_link('127.0.0.1', 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link(~c"servera.unix.city.net", 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link(~c"127.0.0.1", 9999))
     end
 
     test "raises on invalid addresses" do
@@ -58,7 +58,7 @@ defmodule ClientTest do
       err =
         {:tls_alert,
          {:handshake_failure,
-          'TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}'}}
+          ~c"TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}"}}
 
       exp =
         "TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}"
@@ -371,7 +371,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
+      assert {:error, %Error{message: "connection closed", context: :sending, reason: :closed}} ==
                Client.send(client, message)
     end
 
@@ -493,7 +493,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
+      assert {:error, %Error{message: "connection closed", context: :sending, reason: :closed}} ==
                Client.send_async(client, message)
     end
   end

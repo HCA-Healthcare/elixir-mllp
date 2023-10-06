@@ -20,3 +20,11 @@ end
 if should_generate_cert.(), do: System.cmd("sh", ["tls/tls.sh"])
 
 ExUnit.start()
+
+defmodule MLLP.TestHelper.Utils do
+  def otp_release() do
+    :erlang.system_info(:otp_release)
+    |> to_string()
+    |> String.to_integer()
+  end
+end
