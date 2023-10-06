@@ -42,7 +42,7 @@ defmodule MLLP.Receiver do
           packet_framer: module(),
           transport_opts: :ranch.opts(),
           context: map(),
-          ref: reference()
+          ref: term()
         ]
 
   @behaviour :ranch_protocol
