@@ -537,12 +537,6 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag client_cert: ""
     @tag keyfile: ""
 
-    # @tag reason: if otp_release() < 26 do
-    #   [:handshake_failure, :certificate_required]
-    #   else
-    #    {:options, {:certfile, ""}}
-    # end
-
     @tag reason: [:handshake_failure, :certificate_required, {:options, {:certfile, ""}}]
 
     test "no peer cert", ctx do
