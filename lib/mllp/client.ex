@@ -200,14 +200,16 @@ defmodule MLLP.Client do
     "Unexpected packet received"
   end
 
-  def format_error(posix) when is_atom(posix) do
+  def format_error(err) when is_atom(err) do
+    # Check if that's a POSIX error
     posix_error_str =
-      posix
+      err
       |> :inet.format_error()
       |> to_string()
 
     if String.starts_with?(posix_error_str, "unknown POSIX error") do
-      inspect(posix)
+      # No, it's not...
+      inspect(err)
     else
       posix_error_str
     end
