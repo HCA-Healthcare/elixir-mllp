@@ -70,8 +70,11 @@ defmodule ClientTest do
       assert MLLP.Client.format_error("some unknown error") == "some unknown error"
     end
 
-    test "when given terms that are not atoms" do
+    test "when given atoms (which are not POSIX errors)" do
       assert MLLP.Client.format_error(:eh?) == ":eh?"
+    end
+
+    test "when given terms" do
       assert MLLP.Client.format_error({:error, 42}) == "{:error, 42}"
     end
   end
