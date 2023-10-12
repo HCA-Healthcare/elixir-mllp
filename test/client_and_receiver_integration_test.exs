@@ -2,6 +2,7 @@ defmodule ClientAndReceiverIntegrationTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureLog
   import Mox
+  import MLLP.TestHelper.Utils
   setup :verify_on_exit!
   setup :set_mox_global
 
@@ -127,7 +128,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       {:ok, client_pid} = MLLP.Client.start_link({127, 0, 0, 1}, port)
 
-      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :sending, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, "Eh?")
     end
 
@@ -201,7 +202,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
       payload = "A simple message"
 
-      exp_err = %Error{context: :send, reason: :econnrefused, message: "connection refused"}
+      exp_err = %Error{context: :sending, reason: :econnrefused, message: "connection refused"}
       assert {:error, ^exp_err} = MLLP.Client.send(client_pid, payload)
 
       capture_log(fn -> MLLP.Client.stop(client_pid) end)
@@ -224,7 +225,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:error, %Error{context: context, message: message}} =
         MLLP.Client.send(client_pid, "Simple message")
 
-      assert context in [:send, :recv]
+      assert context in [:sending, :receiving]
       assert message in [MLLP.Client.format_error(:closed), MLLP.Client.format_error(:einval)]
 
       refute MLLP.Client.is_connected?(client_pid)
@@ -358,7 +359,7 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
 
-      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :send}} =
+      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :sending}} =
                MLLP.Client.send(
                  client_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
@@ -417,7 +418,7 @@ defmodule ClientAndReceiverIntegrationTest do
 
                Process.sleep(10)
                refute MLLP.Client.is_connected?(client_pid)
-             end) =~ "Handshake failure on connection attempt from {127, 0, 0, 1}"
+             end) =~ "hostname_check_failed"
     end
   end
 
@@ -445,7 +446,7 @@ defmodule ClientAndReceiverIntegrationTest do
           HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
         )
 
-      assert error.context in [:send, :recv]
+      assert error.context in [:sending, :receiving]
       assert error.reason in [:closed, :einval]
     end
 
@@ -506,7 +507,7 @@ defmodule ClientAndReceiverIntegrationTest do
         keyfile: keyfile
       ]
 
-      tls_alert = ctx[:reason] || []
+      tls_alert = ctx[:reason] || [{:options, {:certfile, ""}}]
 
       expected_error_reasons = [:einval, :no_socket, :closed] ++ tls_alert
 
@@ -523,15 +524,21 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag verify: :verify_none
     @tag client_cert: ""
     @tag keyfile: ""
+    @tag reason: [{:options, {:certfile, ""}}]
     test "does not verify client cert if verify none option is provided on receiver", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      if otp_release() < 26 do
+        make_call_and_assert_success(ctx, ctx.ack)
+      else
+        make_call_and_assert_failure(ctx, ctx.reason)
+      end
     end
 
     @tag port: 8162
     @tag client_cert: ""
     @tag keyfile: ""
 
-    @tag reason: [:handshake_failure, :certificate_required]
+    @tag reason: [:handshake_failure, :certificate_required, {:options, {:certfile, ""}}]
+
     test "no peer cert", ctx do
       make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
@@ -654,7 +661,7 @@ defmodule ClientAndReceiverIntegrationTest do
   defp open_ports_for_pid(pid) do
     Enum.filter(Port.list(), fn p ->
       info = Port.info(p)
-      Keyword.get(info, :name) == 'tcp_inet' and Keyword.get(info, :connected) == pid
+      Keyword.get(info, :name) == ~c"tcp_inet" and Keyword.get(info, :connected) == pid
     end)
   end
 

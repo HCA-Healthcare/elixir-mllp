@@ -88,16 +88,20 @@ defmodule MLLP.TLS.HandshakeLoggingTransport do
         {:ok, new_socket}
 
       {:error, _} = handshake_error ->
-        log_peer(peer_data)
+        log_peer(peer_data, handshake_error)
         handshake_error
     end
   end
 
-  defp log_peer({nil, peername_error}) do
-    Logger.error("Handshake failure; peer is undetected (#{inspect(peername_error)})")
+  defp log_peer({nil, peername_error}, handshake_error) do
+    Logger.error(
+      "Handshake failure #{inspect(handshake_error)}; peer is undetected (#{inspect(peername_error)})"
+    )
   end
 
-  defp log_peer({ip, port}) do
-    Logger.error("Handshake failure on connection attempt from #{inspect(ip)}:#{inspect(port)}")
+  defp log_peer({ip, port}, handshake_error) do
+    Logger.error(
+      "Handshake failure #{inspect(handshake_error)} on connection attempt from #{inspect(ip)}:#{inspect(port)}"
+    )
   end
 end

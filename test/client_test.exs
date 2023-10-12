@@ -27,8 +27,8 @@ defmodule ClientTest do
 
       assert match?({:ok, _}, MLLP.Client.start_link(:localhost, 9999))
       assert match?({:ok, _}, MLLP.Client.start_link("servera.app.net", 9999))
-      assert match?({:ok, _}, MLLP.Client.start_link('servera.unix.city.net', 9999))
-      assert match?({:ok, _}, MLLP.Client.start_link('127.0.0.1', 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link(~c"servera.unix.city.net", 9999))
+      assert match?({:ok, _}, MLLP.Client.start_link(~c"127.0.0.1", 9999))
     end
 
     test "raises on invalid addresses" do
@@ -58,7 +58,7 @@ defmodule ClientTest do
       err =
         {:tls_alert,
          {:handshake_failure,
-          'TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}'}}
+          ~c"TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}"}}
 
       exp =
         "TLS client: In state wait_cert_cr at ssl_handshake.erl:2017 generated CLIENT ALERT: Fatal - Handshake Failure\n {bad_cert,hostname_check_failed}"
@@ -70,8 +70,11 @@ defmodule ClientTest do
       assert MLLP.Client.format_error("some unknown error") == "some unknown error"
     end
 
-    test "when given terms that are not atoms" do
+    test "when given atoms (which are not POSIX errors)" do
       assert MLLP.Client.format_error(:eh?) == ":eh?"
+    end
+
+    test "when given terms" do
       assert MLLP.Client.format_error({:error, 42}) == "{:error, 42}"
     end
   end
@@ -263,7 +266,11 @@ defmodule ClientTest do
       message =
         "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|NOTRAILER|P|2.5\rMSA|AA|NOTRAILER\r"
 
-      expected_err = %MLLP.Client.Error{context: :recv, reason: :timeout, message: "timed out"}
+      expected_err = %MLLP.Client.Error{
+        context: :receiving,
+        reason: :timeout,
+        message: "timed out"
+      }
 
       log =
         capture_log([level: :debug], fn ->
@@ -313,7 +320,7 @@ defmodule ClientTest do
         "MSH|^~\\&|SuperOE|XYZImgCtr|MegaReg|XYZHospC|20060529090131-0500||ACK^O01|DONOTWRAP|P|2.5\rMSA|AA|DONOTWRAP\r"
 
       expected_err = %MLLP.Client.Error{
-        context: :recv,
+        context: :receiving,
         message: "Invalid header received in server acknowledgment",
         reason: :invalid_reply
       }
@@ -328,7 +335,7 @@ defmodule ClientTest do
       message = "This message has a TRAILER_WITHIN - beware!"
 
       expected_err = %MLLP.Client.Error{
-        context: :recv,
+        context: :receiving,
         message: "Data received after trailer",
         reason: :data_after_trailer
       }
@@ -367,7 +374,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
+      assert {:error, %Error{message: "connection closed", context: :sending, reason: :closed}} ==
                Client.send(client, message)
     end
 
@@ -489,7 +496,7 @@ defmodule ClientTest do
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
-      assert {:error, %Error{message: "connection closed", context: :send, reason: :closed}} ==
+      assert {:error, %Error{message: "connection closed", context: :sending, reason: :closed}} ==
                Client.send_async(client, message)
     end
   end
