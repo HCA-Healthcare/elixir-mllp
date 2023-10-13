@@ -9,6 +9,8 @@ defmodule MLLP.Ack do
   # # AR - Application Reject
   # # AE – Application Error
 
+  import HL7.Query, only: :macros
+
   defstruct acknowledgement_code: nil,
             text_message: "",
             hl7_ack_message: nil
@@ -74,7 +76,7 @@ defmodule MLLP.Ack do
       |> List.replace_at(6, sending_facility)
       |> List.replace_at(3, receiving_application)
       |> List.replace_at(5, sending_application)
-      |> List.replace_at(9, "ACK^#{HL7.Query.get_part(hl7, "MSH-9.2")}^ACK")
+      |> List.replace_at(9, "ACK^#{HL7.Query.get_part(hl7, ~g{MSH-9.2})}^ACK")
 
     msa = ["MSA", code, message_control_id, text_message]
 
