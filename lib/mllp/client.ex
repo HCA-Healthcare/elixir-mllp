@@ -474,11 +474,9 @@ defmodule MLLP.Client do
 
       {:error, reason} ->
         telemetry(
-          :status,
+          :send_error,
           %{
-            status: :disconnected,
-            error: format_error(reason),
-            context: :sending
+            error: reason
           },
           data
         )
@@ -686,11 +684,11 @@ defmodule MLLP.Client do
 
     {:error, new_error(get_context(data), reason)}
     |> reply_to_caller(data)
-    |> stop_connection(reason, "closing connection to cleanup")
+    |> stop_connection(reason)
     |> tap(fn data ->
       telemetry(
-        :status,
-        %{status: :disconnected, error: format_error(reason)},
+        :transport_error,
+        %{error: reason},
         data
       )
     end)
@@ -704,30 +702,25 @@ defmodule MLLP.Client do
   end
 
   @doc false
-  def terminate(reason = :normal, data) do
-    Logger.debug("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
-    stop_connection(data, reason, "process terminated")
-  end
-
   def terminate(reason, data) do
     Logger.error("Client socket terminated. Reason: #{inspect(reason)} State #{inspect(data)}")
-    stop_connection(data, reason, "process terminated")
+    stop_connection(data, reason)
   end
 
-  defp maybe_close(reason, %{close_on_recv_error: true, context: context} = data) do
-    stop_connection(data, reason, context)
+  defp maybe_close(reason, %{close_on_recv_error: true} = data) do
+    stop_connection(data, reason)
   end
 
   defp maybe_close(_reason, data), do: data
 
-  defp stop_connection(%State{socket: nil} = data, _error, _context) do
+  defp stop_connection(%State{socket: nil} = data, _error) do
     data
   end
 
-  defp stop_connection(%State{socket: socket, tcp: tcp} = data, error, context) do
+  defp stop_connection(%State{socket: socket, tcp: tcp} = data, error) do
     telemetry(
-      :status,
-      %{status: :disconnected, error: format_error(error), context: context},
+      :connection_closed,
+      %{error: error},
       data
     )
 
@@ -746,7 +739,6 @@ defmodule MLLP.Client do
   end
 
   defp attempt_connection(%State{} = data) do
-    telemetry(:status, %{status: :connecting}, data)
     opts = fixed_socket_opts() ++ data.socket_opts ++ data.tls_opts
 
     case data.tcp.connect(data.address, data.port, opts, 2000) do
@@ -755,7 +747,7 @@ defmodule MLLP.Client do
           data
           |> maybe_reset_reconnection_timeout()
 
-        telemetry(:status, %{status: :connected}, data1)
+        telemetry(:connection_success, %{}, data1)
         {:ok, %{data1 | socket: socket, tcp_error: nil}}
 
       {:error, reason} ->
@@ -763,8 +755,8 @@ defmodule MLLP.Client do
         Logger.error(fn -> "Error connecting to #{data.socket_address} => #{message}" end)
 
         telemetry(
-          :status,
-          %{status: :disconnected, error: format_error(reason), context: "connect failure"},
+          :connection_failure,
+          %{error: reason},
           data
         )
 
@@ -814,7 +806,7 @@ defmodule MLLP.Client do
   end
 
   defp filter_metadata(metadata) do
-    Map.take(metadata, [:address, :port])
+    Map.take(metadata, [:address, :port, :context])
   end
 
   defp validate_options(opts) do
