@@ -547,6 +547,7 @@ defmodule MLLP.Client do
   end
 
   def receiving(:state_timeout, :receive_timeout, data) do
+    telemetry(:receive_timeout, %{error: :timeout}, data)
     next_state(:connected, reply_to_caller({:error, :timeout}, maybe_close(:timeout, data)))
   end
 
@@ -614,6 +615,7 @@ defmodule MLLP.Client do
   ## No header in the first packet
   defp handle_received(_reply, %{receive_buffer: []} = data) do
     reply_to_caller({:error, :invalid_reply}, data)
+    |> tap(fn _ -> telemetry(:invalid_response, %{error: :no_header}, data) end)
   end
 
   ## The rest of MLLP (after the header was received)
@@ -627,11 +629,15 @@ defmodule MLLP.Client do
     case trailer_check(reply, last_byte) do
       :data_after_trailer ->
         Logger.error("Client #{inspect(self())} received data following the trailer")
+
         reply_to_caller({:error, :data_after_trailer}, data)
+        |> tap(fn _ -> telemetry(:invalid_response, %{error: :data_after_trailer}, data) end)
 
       true ->
         Logger.debug("Client #{inspect(self())} received a full MLLP!")
+
         reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
+        |> tap(fn _ -> telemetry(:receive_valid, %{}, data) end)
 
       false ->
         Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
@@ -793,7 +799,7 @@ defmodule MLLP.Client do
 
   defp telemetry(event_name, measurements, %State{telemetry_module: telemetry_module} = metadata) do
     telemetry_module.execute(
-      [:client, event_name],
+      [:mllp, :client, event_name],
       add_timestamps(measurements),
       filter_metadata(metadata)
     )
@@ -806,7 +812,7 @@ defmodule MLLP.Client do
   end
 
   defp filter_metadata(metadata) do
-    Map.take(metadata, [:address, :port, :context])
+    Map.take(metadata, [:address, :port, :transport, :context])
   end
 
   defp validate_options(opts) do
