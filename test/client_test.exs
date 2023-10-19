@@ -253,6 +253,12 @@ defmodule ClientTest do
       num_receives = count_occurences(log, received_log)
 
       assert num_receives == 1
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :receive_valid]
+                      }},
+                     100
     end
 
     test "when replies are fragmented and the last fragment is not received", ctx do
@@ -324,6 +330,13 @@ defmodule ClientTest do
         {:error, expected_err} ==
           Client.send(ctx.client, message)
       )
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :invalid_response],
+                        measurements: %{error: :no_header}
+                      }},
+                     100
     end
 
     test "when response contains data after the trailer", ctx do
@@ -339,6 +352,13 @@ defmodule ClientTest do
         {:error, expected_err} ==
           Client.send(ctx.client, message)
       )
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :invalid_response],
+                        measurements: %{error: :data_after_trailer}
+                      }},
+                     100
     end
 
     test "when given non hl7", ctx do
@@ -498,8 +518,7 @@ defmodule ClientTest do
 
   describe "telemetry" do
     setup do
-      Process.register(self(), :mock_telemetry_collector)
-      setup_client_receiver(telemetry_module: ClientTest.TelemetryModule, use_backoff: false)
+      setup_client_receiver(use_backoff: false)
     end
 
     test "connect/send/reconnect events", ctx do
@@ -556,9 +575,10 @@ defmodule ClientTest do
   end
 
   defp setup_client_receiver(opts \\ []) do
+    Process.register(self(), :mock_telemetry_collector)
     address = {127, 0, 0, 1}
     port = Keyword.get(opts, :port, 4090)
-    telemetry_module = Keyword.get(opts, :telemetry_module)
+    telemetry_module = Keyword.get(opts, :telemetry_module, ClientTest.TelemetryModule)
     use_backoff = Keyword.get(opts, :use_backoff, true)
     {:ok, receiver} = start_receiver(port)
 

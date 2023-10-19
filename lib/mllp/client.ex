@@ -812,7 +812,7 @@ defmodule MLLP.Client do
   end
 
   defp filter_metadata(metadata) do
-    Map.take(metadata, [:address, :port, :transport, :context])
+    Map.take(metadata, [:address, :port, :tcp, :context])
   end
 
   defp validate_options(opts) do
@@ -823,7 +823,7 @@ defmodule MLLP.Client do
 
   def default_opts() do
     %{
-      telemetry_module: MLLP.DefaultTelemetry,
+      telemetry_module: :telemetry,
       tls_opts: [],
       socket_opts: default_socket_opts()
     }
