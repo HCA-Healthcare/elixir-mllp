@@ -10,11 +10,6 @@ defmodule ClientTest do
   setup :verify_on_exit!
   setup :set_mox_global
 
-  setup do
-    attach_telemetry()
-    on_exit(fn -> detach_telemetry() end)
-  end
-
   describe "host parameters" do
     test "accepts ipv4 / ipv6 tuples and binaries for host parameter" do
       assert match?({:ok, _}, MLLP.Client.start_link({127, 0, 0, 1}, 9999))
@@ -258,6 +253,12 @@ defmodule ClientTest do
       num_receives = count_occurences(log, received_log)
 
       assert num_receives == 1
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :receive_valid]
+                      }},
+                     100
     end
 
     test "when replies are fragmented and the last fragment is not received", ctx do
@@ -329,6 +330,13 @@ defmodule ClientTest do
         {:error, expected_err} ==
           Client.send(ctx.client, message)
       )
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :invalid_response],
+                        measurements: %{error: :no_header}
+                      }},
+                     100
     end
 
     test "when response contains data after the trailer", ctx do
@@ -344,6 +352,13 @@ defmodule ClientTest do
         {:error, expected_err} ==
           Client.send(ctx.client, message)
       )
+
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :invalid_response],
+                        measurements: %{error: :data_after_trailer}
+                      }},
+                     100
     end
 
     test "when given non hl7", ctx do
@@ -501,6 +516,42 @@ defmodule ClientTest do
     end
   end
 
+  describe "telemetry" do
+    setup do
+      setup_client_receiver(use_backoff: false)
+    end
+
+    test "connect/send/reconnect events", ctx do
+      ## Telemetry event is emitted upon successful connection...
+      assert_receive {:telemetry_event, %{event: [:mllp, :client, :connection_success]}}, 100
+      raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
+      message = HL7.Message.new(raw_hl7)
+      ## ...and upon getting a successful response
+      {:ok, _, _} = Client.send(ctx.client, message)
+      assert_receive {:telemetry_event, %{event: [:mllp, :client, :receive_valid]}}, 100
+      MLLP.Receiver.stop(ctx.port)
+      ## ...and upon the connection being closed
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :connection_closed],
+                        measurements: %{error: :closed}
+                      }},
+                     100
+
+      ## ...and upon reconnection attempt (within a second or so, we use default auto_reconnect)
+      assert_receive {:telemetry_event,
+                      %{
+                        event: [:mllp, :client, :connection_failure],
+                        measurements: %{error: :econnrefused}
+                      }},
+                     1200
+
+      ## ...and upon successful reconnection
+      start_receiver(ctx.port)
+      assert_receive {:telemetry_event, %{event: [:mllp, :client, :connection_success]}}, 1200
+    end
+  end
+
   describe "terminate/2" do
     test "logs debug message when reason is :normal" do
       Logger.configure(level: :debug)
@@ -523,11 +574,20 @@ defmodule ClientTest do
     end
   end
 
-  defp setup_client_receiver() do
+  defp setup_client_receiver(opts \\ []) do
+    Process.register(self(), :mock_telemetry_collector)
     address = {127, 0, 0, 1}
-    port = 4090
-    {:ok, receiver} = MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
-    {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCP)
+    port = Keyword.get(opts, :port, 4090)
+    telemetry_module = Keyword.get(opts, :telemetry_module, ClientTest.TelemetryModule)
+    use_backoff = Keyword.get(opts, :use_backoff, true)
+    {:ok, receiver} = start_receiver(port)
+
+    {:ok, client} =
+      Client.start_link(address, port,
+        tcp: MLLP.TCP,
+        telemetry_module: telemetry_module,
+        use_backoff: use_backoff
+      )
 
     on_exit(fn ->
       try do
@@ -543,30 +603,8 @@ defmodule ClientTest do
     %{client: client, receiver: receiver, port: port}
   end
 
-  defp telemetry_event(
-         [:mllp, :client, event_name] = _full_event_name,
-         measurements,
-         metadata,
-         config
-       ) do
-    send(
-      config.test_pid,
-      {:telemetry_call, %{event_name: event_name, measurements: measurements, metadata: metadata}}
-    )
-  end
-
-  defp attach_telemetry() do
-    event_names =
-      [:status, :sending, :received]
-      |> Enum.map(fn e -> [:mllp, :client, e] end)
-
-    :telemetry.attach_many("telemetry_events", event_names, &telemetry_event/4, %{
-      test_pid: self()
-    })
-  end
-
-  defp detach_telemetry() do
-    :telemetry.detach("telemetry_events")
+  defp start_receiver(port) do
+    MLLP.Receiver.start(port: port, dispatcher: ClientTest.TestDispatcher)
   end
 
   defp count_occurences(str, substr) do
@@ -624,6 +662,17 @@ defmodule ClientTest do
           msg
         end
       end)
+    end
+  end
+
+  defmodule TelemetryModule do
+    def execute(event, measurements, metadata) do
+      recipient = Process.whereis(:mock_telemetry_collector)
+
+      send(
+        recipient,
+        {:telemetry_event, %{event: event, measurements: measurements, metadata: metadata}}
+      )
     end
   end
 end
