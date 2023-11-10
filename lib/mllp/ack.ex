@@ -76,7 +76,7 @@ defmodule MLLP.Ack do
       |> List.replace_at(6, sending_facility)
       |> List.replace_at(3, receiving_application)
       |> List.replace_at(5, sending_application)
-      |> List.replace_at(9, "ACK^#{HL7.Query.get_part(hl7, ~g{MSH-9.2})}^ACK")
+      |> List.replace_at(9, "ACK^#{HL7.Query.find_first(hl7, ~p{MSH-9.2})}^ACK")
 
     msa = ["MSA", code, message_control_id, text_message]
 
