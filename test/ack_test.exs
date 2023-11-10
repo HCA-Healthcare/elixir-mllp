@@ -11,87 +11,87 @@ defmodule AckTest do
         |> HL7.Message.new()
 
       ack = Ack.get_ack_for_message(bad_message, "AA")
-      assert "AR" == ack |> get_part(~g{MSA-1})
+      assert "AR" == ack |> find_first(~p{MSA-1})
       assert "ACK" == ack.header.message_type
-      assert ack |> get_part(~g{MSA-3}) =~ "missing_header"
+      assert ack |> find_first(~p{MSA-3}) =~ "missing_header"
     end
 
     test "for an invalid HL7 string" do
       bad_message = "Bad Message"
 
       ack = Ack.get_ack_for_message(bad_message, "AA")
-      assert "AR" == ack |> get_part(~g{MSA-1})
+      assert "AR" == ack |> find_first(~p{MSA-1})
       assert "ACK" == ack.header.message_type
 
-      assert ack |> get_part(~g{MSA-3}) ==
+      assert ack |> find_first(~p{MSA-3}) ==
                "Message was not parsable as HL7. Reason: missing_header"
     end
 
     test "with code `application_accepted`" do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
-      assert "AA" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AA" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `AA`" do
       hl7_ack = get_ack_for_wikipedia_example("AA")
-      assert "AA" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AA" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `CA`" do
       hl7_ack = get_ack_for_wikipedia_example("CA")
-      assert "CA" == hl7_ack |> get_part(~g{MSA-1})
+      assert "CA" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `application_reject`" do
       hl7_ack = get_ack_for_wikipedia_example(:application_reject)
-      assert "AR" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AR" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `AR`" do
       hl7_ack = get_ack_for_wikipedia_example("AR")
-      assert "AR" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AR" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `CR`" do
       hl7_ack = get_ack_for_wikipedia_example("CR")
-      assert "CR" == hl7_ack |> get_part(~g{MSA-1})
+      assert "CR" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `application_error`" do
       hl7_ack = get_ack_for_wikipedia_example(:application_error)
-      assert "AE" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AE" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `AE`" do
       hl7_ack = get_ack_for_wikipedia_example("AE")
-      assert "AE" == hl7_ack |> get_part(~g{MSA-1})
+      assert "AE" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "with code `CE`" do
       hl7_ack = get_ack_for_wikipedia_example("CE")
-      assert "CE" == hl7_ack |> get_part(~g{MSA-1})
+      assert "CE" == hl7_ack |> find_first(~p{MSA-1})
     end
 
     test "returns an ACK message with the proper message_type" do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
       assert "ACK" == hl7_ack.header.message_type
       assert "A01" == hl7_ack.header.trigger_event
-      assert "ACK" == HL7.Query.get_part(hl7_ack, ~g{MSH-9.3})
+      assert "ACK" == HL7.Query.find_first(hl7_ack, ~p{MSH-9.3})
     end
 
     test "return an ACK message with a matching message_control_id" do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
 
-      assert "01052901" == hl7_ack |> new() |> get_part(~g{MSA-2})
+      assert "01052901" == hl7_ack |> new() |> find_first(~p{MSA-2})
     end
 
     test "returns an ACK message with the sender and receiver fields properly reversed" do
       hl7_ack = get_ack_for_wikipedia_example(:application_accept)
 
-      assert "MegaReg" == hl7_ack |> get_part(~g{MSH-5})
-      assert "XYZHospC" == hl7_ack |> get_part(~g{MSH-6})
-      assert "SuperOE" == hl7_ack |> get_part(~g{MSH-3})
-      assert "XYZImgCtr" == hl7_ack |> get_part(~g{MSH-4})
+      assert "MegaReg" == hl7_ack |> find_first(~p{MSH-5})
+      assert "XYZHospC" == hl7_ack |> find_first(~p{MSH-6})
+      assert "SuperOE" == hl7_ack |> find_first(~p{MSH-3})
+      assert "XYZImgCtr" == hl7_ack |> find_first(~p{MSH-4})
     end
   end
 
