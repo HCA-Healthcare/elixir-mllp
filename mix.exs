@@ -36,7 +36,7 @@ defmodule MLLP.MixProject do
     [
       {:telemetry, "~> 1.0"},
       {:ranch, "~> 1.8.0"},
-      {:elixir_hl7, "~> 0.8.0"},
+      {:elixir_hl7, "~> 0.9.1"},
       {:backoff, "~> 1.1.6"},
       {:ex_doc, "~> 0.24.2", only: :dev, runtime: false},
       {:dialyxir, "~> 1.1.0", only: [:dev, :test], runtime: false},
