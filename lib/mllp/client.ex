@@ -733,7 +733,7 @@ defmodule MLLP.Client do
     Logger.debug("Stopping connection: #{format_error(error)}")
 
     if error in [:timeout, :unexpected_packet_received] do
-      :ok = :inet.setopts(socket, linger: {true, 0})
+      :ok = tcp.setopts(socket, linger: {true, 0})
       tcp.shutdown(socket, :read_write)
     else
       tcp.close(socket)

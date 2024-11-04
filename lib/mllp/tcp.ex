@@ -1,4 +1,6 @@
 defmodule MLLP.TCPContract do
+  @callback setopts(socket :: :gen_tcp.socket(), options :: [:gen_tcp.option()]) ::
+              :ok | {:error, :inet.posix()}
   @callback send(socket :: :gen_tcp.socket(), packet :: iodata()) :: :ok | {:error, any}
   @callback recv(socket :: :gen_tcp.socket(), length :: integer()) :: {:ok, any} | {:error, any}
   @callback recv(socket :: :gen_tcp.socket(), length :: integer(), timeout :: integer()) ::
@@ -17,6 +19,7 @@ end
 defmodule MLLP.TCP do
   @behaviour MLLP.TCPContract
 
+  defdelegate setopts(socket, opts), to: :inet
   defdelegate send(socket, packet), to: :gen_tcp
   defdelegate recv(socket, length), to: :gen_tcp
   defdelegate recv(socket, length, timeout), to: :gen_tcp

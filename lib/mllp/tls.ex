@@ -1,4 +1,6 @@
 defmodule MLLP.TLSContract do
+  @callback setopts(socket :: :ssl.sslsocket(), options :: [:gen_tcp.option()]) ::
+              :ok | {:error, term()}
   @callback send(socket :: :ssl.sslsocket(), packet :: iodata()) :: :ok | {:error, any}
   @callback recv(socket :: :ssl.sslsocket(), length :: integer()) :: {:ok, any} | {:error, any}
   @callback recv(socket :: :ssl.sslsocket(), length :: integer(), timeout :: integer()) ::
@@ -17,6 +19,7 @@ end
 defmodule MLLP.TLS do
   @behaviour MLLP.TLSContract
 
+  defdelegate setopts(socket, opts), to: :ssl
   defdelegate send(socket, packet), to: :ssl
   defdelegate recv(socket, length), to: :ssl
   defdelegate recv(socket, length, timeout), to: :ssl
