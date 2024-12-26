@@ -580,7 +580,7 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag client_cert: "tls/server/server_certificate.pem"
     @tag keyfile: "tls/server/private_key.pem"
 
-    @tag reason: [:handshake_failure]
+    @tag reason: [:unsupported_certificate]
     test "reject server cert as peer cert", ctx do
       make_call_and_assert_failure(ctx, ctx.expected_error_reasons)
     end
