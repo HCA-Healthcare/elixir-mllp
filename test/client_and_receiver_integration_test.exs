@@ -378,6 +378,60 @@ defmodule ClientAndReceiverIntegrationTest do
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
                )
     end
+
+    @tag :tls
+    @tag port: 8158
+    test "reconnect when ssl socket is closed", ctx do
+      {:ok, client_pid} =
+        MLLP.Client.start_link("localhost", ctx.port, tls: ctx.client_tls_options)
+
+      fake_pid1 = spawn(fn -> :ok end)
+      fake_pid2 = spawn(fn -> :ok end)
+
+      dead_socket =
+        {:sslsocket, {:gen_tcp, hd(:erlang.ports()), :tls_connectioned, :undefined},
+         [fake_pid1, fake_pid2]}
+
+      :sys.replace_state(client_pid, fn {:connected, state} ->
+        {:connected, Map.put(state, :socket, dead_socket)}
+      end)
+
+      assert MLLP.Client.is_connected?(client_pid)
+
+      assert {:error,
+              %MLLP.Client.Error{
+                context: :sending,
+                reason: :closed,
+                message: "connection closed"
+              }} ==
+               MLLP.Client.send(
+                 client_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+
+      wait_until(
+        fn ->
+          case :sys.get_state(client_pid) do
+            {:connected, %{socket: socket}} ->
+              socket != dead_socket
+
+            _ ->
+              false
+          end
+        end,
+        1_000
+      )
+
+      assert MLLP.Client.is_connected?(client_pid)
+      {:connected, %{socket: socket}} = :sys.get_state(client_pid)
+      assert {:ok, _} = :ssl.getstat(socket)
+
+      assert ctx.ack ==
+               MLLP.Client.send(
+                 client_pid,
+                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+               )
+    end
   end
 
   describe "tls handshake failure logging" do
@@ -680,5 +734,26 @@ defmodule ClientAndReceiverIntegrationTest do
     end)
 
     %{receiver: receiver, port: port}
+  end
+
+  defp wait_until(fun, timeout) when is_integer(timeout) do
+    timer = Process.send_after(self(), :timeout, timeout)
+    wait_until(fun, timer)
+  end
+
+  defp wait_until(fun, timer) when is_reference(timer) do
+    receive do
+      :timeout ->
+        flunk("Timed out")
+    after
+      50 ->
+        case fun.() do
+          true ->
+            Process.cancel_timer(timer)
+
+          false ->
+            wait_until(fun, timer)
+        end
+    end
   end
 end

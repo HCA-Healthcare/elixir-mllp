@@ -381,11 +381,15 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
+        2,
         fn ^address, ^port, ^socket_opts, 2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> {:error, :closed} end)
+      |> expect(:close, fn _socket ->
+        :ok
+      end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
@@ -503,11 +507,16 @@ defmodule ClientTest do
       MLLP.TCPMock
       |> expect(
         :connect,
+        2,
         fn ^address, ^port, ^socket_opts, 2000 ->
           {:ok, socket}
         end
       )
       |> expect(:send, fn ^socket, ^packet -> {:error, :closed} end)
+      |> expect(:close, fn _socket ->
+        # Assert we received the default options
+        :ok
+      end)
 
       {:ok, client} = Client.start_link(address, port, tcp: MLLP.TCPMock)
 
