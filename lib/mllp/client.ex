@@ -16,6 +16,7 @@ defmodule MLLP.ClientContract do
           socket_opts: [:gen_tcp.option()],
           telemetry_module: nil,
           close_on_recv_error: boolean(),
+          reconnect_on_send_error: boolean(),
           tls: [:ssl.tls_client_option()]
         ]
 
@@ -169,6 +170,7 @@ defmodule MLLP.Client do
             tls_opts: [],
             socket_opts: [],
             close_on_recv_error: true,
+            reconnect_on_send_error: true,
             backoff: nil,
             caller: nil,
             receive_buffer: [],
@@ -254,6 +256,12 @@ defmodule MLLP.Client do
      Setting this to `true` is usually the safest behaviour to avoid a "dead lock" situation between a
      client and a server. This functions similarly to the `:send_timeout` option provided by
     [`:gen_tcp`](`:gen_tcp`). Defaults to `true`.
+
+  * `:reconnect_on_send_error` - A boolean value which dictates whether the client socket will be
+     closed when an error is returned by the transport when attempting to send data. This generally
+     useful in most MLLP.Client scenarios as the the MLLP protocol provides no recourse mechanism when
+     a connection error occurs and it is non-trival to distiguish from application level and socket level
+     errors. Setting this to `true` is usually the safest behaviour, as such it defaults to `true`.
 
   * `:tls` - A list of tls options as supported by [`:ssl`](`:ssl`). When using TLS it is highly recommended you
      set `:verify` to `:verify_peer`, select a CA trust store using the `:cacertfile` or `:cacerts` options.
@@ -482,7 +490,25 @@ defmodule MLLP.Client do
         )
 
         error_reply = {:error, new_error(:sending, reason)}
-        {:keep_state_and_data, [{:reply, from, error_reply}]}
+
+        case data.reconnect_on_send_error do
+          true ->
+            Logger.error(
+              "Failure to send payload using existing socket with reason #{inspect(reason)}, reconnecting..."
+            )
+
+            data = stop_connection(data, reason)
+
+            actions = [
+              {:reply, from, error_reply},
+              {:next_event, :internal, :connect}
+            ]
+
+            next_state(:disconnected, handle_closed(data), actions)
+
+          false ->
+            {:keep_state_and_data, [{:reply, from, error_reply}]}
+        end
     end
   end
 
