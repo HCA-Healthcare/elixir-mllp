@@ -52,9 +52,19 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp match_fun({:cn, reference}, {_, reference}), do: true
-  defp match_fun(reference, {_, reference}), do: true
+  defp match_fun({:cn, reference_id}, {_, peer_cn}) do
+    match_cn?(reference_id, peer_cn)
+  end
+
+  defp match_fun(reference_id, {_, peer_cn}) do
+    match_cn?(reference_id, peer_cn)
+  end
+
   defp match_fun(_, _), do: false
+
+  defp match_cn?(reference_id, peer_cn) do
+    :string.equal(reference_id, peer_cn, true)
+  end
 
   defp fqdn_fun({:cn, value}), do: value
 

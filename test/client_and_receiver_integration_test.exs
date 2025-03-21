@@ -665,6 +665,20 @@ defmodule ClientAndReceiverIntegrationTest do
       make_call_and_assert_success(ctx, ctx.ack)
     end
 
+    @tag port: 8170
+    @tag allowed_clients: ["CLIENT-1"]
+    test "accept peer cert with case mismatch", ctx do
+      make_call_and_assert_success(ctx, ctx.ack)
+    end
+
+    @tag port: 8171
+    @tag allowed_clients: ["mixed-CASE-client-cert"],
+         client_cert: "tls/client_mixed_case_cn/client_certificate.pem",
+         keyfile: "tls/client_mixed_case_cn/private_key.pem"
+    test "accept peer cert with mixed case CN", ctx do
+      make_call_and_assert_success(ctx, ctx.ack)
+    end
+
     defp make_call_and_assert_success(ctx, expected_result) do
       assert expected_result == start_client_and_send(ctx)
     end
