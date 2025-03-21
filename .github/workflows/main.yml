@@ -30,12 +30,12 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: restore-deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: restore-build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
@@ -58,12 +58,12 @@ jobs:
           otp-version: ${{ env.otp-version }}
           elixir-version: ${{ env.elixir-version }}
       - name: restore-deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ env.otp-version }}-${ env.elixir-version }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: restore-build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ env.otp-version }}-${{ env.elixir-version }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
@@ -87,17 +87,17 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: restore-deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: restore-build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: restore-plts
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: priv/plts
           key: ${{ runner.os }}-mllp-dialyzer-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}-${{ hashFiles(format('{0}{1}', github.workspace, '/priv/plts/mllp.plt')) }}
@@ -121,12 +121,12 @@ jobs:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
       - name: restore-deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
       - name: restore-build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         with:
           path: _build
           key: ${{ runner.os }}-build-${{ matrix.otp }}-${{ matrix.elixir }}-${{ env.cache-version }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
