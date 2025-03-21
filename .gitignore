@@ -35,4 +35,5 @@ mllp-*.tar
 /tls/server
 /tls/external
 /tls/expired_client
+/tls/client_mixed_case_cn
 
