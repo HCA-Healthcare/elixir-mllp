@@ -15,6 +15,7 @@ default_md = sha256
 
 policy = root_ca_policy
 x509_extensions = certificate_extensions
+copy_extensions = copy
 
 [ root_ca_policy ]
 commonName = supplied
