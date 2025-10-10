@@ -52,7 +52,7 @@ defmodule MLLP.Peer do
     end
   end
 
-  defp match_fun({:cn, reference_id}, {_, peer_cn}) do
+  defp match_fun({_id, reference_id}, {_, peer_cn}) do
     match_cn?(reference_id, peer_cn)
   end
 
