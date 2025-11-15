@@ -9,6 +9,25 @@ defmodule ClientAndReceiverIntegrationTest do
   alias MLLP.Client.Error
   @moduletag capture_log: true
 
+  defmodule MyEventCallbackMod do
+    use GenServer
+
+    def start_link(notify) do
+      GenServer.start_link(__MODULE__, notify, name: __MODULE__)
+    end
+
+    def init(notify) do
+      {:ok, notify}
+    end
+
+    def callback(event, context) do
+      {:ok, notify} = GenServer.call(__MODULE__, :get_notify)
+      send(notify, {__MODULE__, event, context})
+    end
+
+    def handle_call(:get_notify, _, notify), do: {:reply, {:ok, notify}, notify}
+  end
+
   setup ctx do
     ack = {
       :ok,
@@ -79,6 +98,8 @@ defmodule ClientAndReceiverIntegrationTest do
              %{
                packet_framer_module: MLLP.DefaultPacketFramer,
                dispatcher_module: MLLP.EchoDispatcher,
+               telemetry_module: nil,
+               event_callback: nil,
                allowed_clients: %{},
                verify: nil,
                context: %{}
@@ -98,8 +119,26 @@ defmodule ClientAndReceiverIntegrationTest do
     test "with a listener listening" do
       port = 8143
 
+      me = self()
+
+      start_supervised!({MyEventCallbackMod, me})
+
+      :telemetry.attach_many(
+        __MODULE__,
+        [[:mllp, :receiver, :connection, :start], [:mllp, :receiver, :connection, :stop]],
+        fn event, measurements, metadata, _config ->
+          send(me, {event, measurements, metadata})
+        end,
+        %{}
+      )
+
       {:ok, %{pid: receiver_pid}} =
-        MLLP.Receiver.start(port: port, dispatcher: MLLP.EchoDispatcher)
+        MLLP.Receiver.start(
+          port: port,
+          dispatcher: MLLP.EchoDispatcher,
+          telemetry_module: :telemetry,
+          event_callback: &MyEventCallbackMod.callback/2
+        )
 
       assert Process.alive?(receiver_pid)
 
@@ -113,6 +152,26 @@ defmodule ClientAndReceiverIntegrationTest do
 
       MLLP.Receiver.stop(port)
       refute Process.alive?(receiver_pid)
+
+      assert_receive {[:mllp, :receiver, :connection, :start], measurements_start, %{}}
+
+      assert_receive {[:mllp, :receiver, :connection, :stop], measurements_stop,
+                      %{
+                        reason: :tcp_closed
+                      }}
+
+      assert measurements_stop.monotonic_time - measurements_start.monotonic_time ==
+               measurements_stop.duration
+
+      assert_receive {MyEventCallbackMod, [:mllp, :receiver, :connection, :stop],
+                      %{
+                        reason: :tcp_closed,
+                        connection_info: %{
+                          client_info: {{127, 0, 0, 1}, _},
+                          peer_name: {127, 0, 0, 1},
+                          server_info: {{127, 0, 0, 1}, 8143}
+                        }
+                      }}
     end
 
     test "without a listener" do

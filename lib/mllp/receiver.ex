@@ -40,6 +40,8 @@ defmodule MLLP.Receiver do
           port: pos_integer(),
           dispatcher: module(),
           packet_framer: module(),
+          telemetry_module: nil | module(),
+          event_callback: fun(),
           transport_opts: :ranch.opts(),
           context: map(),
           ref: term()
@@ -130,6 +132,8 @@ defmodule MLLP.Receiver do
              dispatcher_module: MLLP.EchoDispatcher,
              context: %{},
              allowed_clients: %{},
+             telemetry_module: nil,
+             event_callback: nil,
              verify: nil
            }
         ]},
@@ -184,6 +188,23 @@ defmodule MLLP.Receiver do
       Keyword.get(opts, :dispatcher, nil) ||
         raise(ArgumentError, "No dispatcher module provided")
 
+    event_callback =
+      case Keyword.get(opts, :event_callback, nil) do
+        nil ->
+          nil
+
+        cb ->
+          info = Function.info(cb)
+
+          case info[:type] == :external and info[:arity] == 2 do
+            true ->
+              cb
+
+            false ->
+              raise "Only external functions are supported for event_callback."
+          end
+      end
+
     Code.ensure_loaded?(dispatcher_mod) ||
       raise "The dispatcher module #{dispatcher_mod} could not be found."
 
@@ -210,13 +231,16 @@ defmodule MLLP.Receiver do
     verify = get_in(transport_opts, [:socket_opts, :verify])
     allowed_clients = get_allowed_clients(verify, opts)
 
-    proto_opts = %{
-      packet_framer_module: packet_framer_mod,
-      dispatcher_module: dispatcher_mod,
-      allowed_clients: allowed_clients,
-      verify: verify,
-      context: Keyword.get(opts, :context, %{})
-    }
+    proto_opts =
+      %{
+        packet_framer_module: packet_framer_mod,
+        dispatcher_module: dispatcher_mod,
+        telemetry_module: opts[:telemetry_module],
+        event_callback: event_callback,
+        allowed_clients: allowed_clients,
+        verify: verify,
+        context: Keyword.get(opts, :context, %{})
+      }
 
     %{
       receiver_id: receiver_id,
@@ -319,17 +343,29 @@ defmodule MLLP.Receiver do
           Map.get(options, :context, %{})
           |> Map.put(:connection_info, connection_info)
 
+        now = :erlang.monotonic_time()
+
         state = %{
           socket: socket,
           server_info: server_info,
           client_info: client_info,
+          connection_established_at: now,
           transport: transport,
+          telemetry_module: Map.get(options, :telemetry_module, nil),
+          event_callback: Map.get(options, :event_callback, nil),
           framing_context: %FramingContext{
             receiver_context: receiver_context,
             packet_framer_module: Map.get(options, :packet_framer_module),
             dispatcher_module: Map.get(options, :dispatcher_module)
           }
         }
+
+        telemetry(
+          [:connection, :start],
+          %{monotonic_time: now},
+          %{},
+          state
+        )
 
         # http://erlang.org/doc/man/gen_server.html#enter_loop-3
         :gen_server.enter_loop(__MODULE__, [], state)
@@ -352,17 +388,39 @@ defmodule MLLP.Receiver do
   end
 
   def handle_info({message, _socket}, state) when message in [:tcp_closed, :ssl_closed] do
+    telemetry(
+      [:connection, :stop],
+      %{},
+      %{reason: message},
+      state
+    )
+
     Logger.debug("MLLP.Receiver tcp_closed.")
     {:stop, :normal, state}
   end
 
   def handle_info({message, _, reason}, state) when message in [:tcp_error, :tls_error] do
+    telemetry(
+      [:connection, :stop],
+      %{},
+      %{reason: message},
+      state
+    )
+
     Logger.error(fn -> "MLLP.Receiver encountered a tcp_error: [#{inspect(reason)}]" end)
     {:stop, reason, state}
   end
 
   def handle_info(:timeout, state) do
     Logger.debug("Receiver timed out.")
+
+    telemetry(
+      [:connection, :stop],
+      %{},
+      %{reason: :timeout},
+      state
+    )
+
     {:stop, :normal, state}
   end
 
@@ -442,5 +500,48 @@ defmodule MLLP.Receiver do
 
         nil
     end
+  end
+
+  defp telemetry(_event_name, _measurements, %{}, %{telemetry_module: nil} = _metadata) do
+    :ok
+  end
+
+  defp telemetry(event_name, measurements, meta, %{telemetry_module: telemetry_module} = state) do
+    measurements = add_measurements(List.last(event_name), measurements, state)
+    event_name = [:mllp, :receiver] ++ event_name
+
+    telemetry_module.execute(
+      event_name,
+      add_measurements(List.last(event_name), measurements, state),
+      meta
+    )
+
+    maybe_fire_event_callback(
+      event_name,
+      Map.merge(meta, state.framing_context.receiver_context),
+      state
+    )
+  end
+
+  defp add_measurements(:stop, measurements, %{connection_established_at: then}) do
+    now = :erlang.monotonic_time()
+    duration = now - then
+    Map.merge(measurements, %{duration: duration, monotonic_time: now})
+  end
+
+  defp add_measurements(_, measurements, _) do
+    add_timestamps(measurements)
+  end
+
+  defp add_timestamps(%{monotonic_time: _} = measurements), do: measurements
+
+  defp add_timestamps(measurements) do
+    Map.put(measurements, :monotonic_time, :erlang.monotonic_time())
+  end
+
+  defp maybe_fire_event_callback(_, _, %{event_callback: nil}), do: :ok
+
+  defp maybe_fire_event_callback(event_name, meta, %{event_callback: cb}) when is_function(cb) do
+    cb.(event_name, meta)
   end
 end
