@@ -502,24 +502,27 @@ defmodule MLLP.Receiver do
     end
   end
 
-  defp telemetry(_event_name, _measurements, %{}, %{telemetry_module: nil} = _metadata) do
+  defp telemetry(event_name, measurements, meta, state) do
+    event = [:mllp, :receiver] ++ event_name
+
+    do_telemetry(event, measurements, meta, state)
+
+    maybe_fire_event_callback(
+      event,
+      Map.merge(meta, state.framing_context.receiver_context),
+      state
+    )
+  end
+
+  defp do_telemetry(_event, _measurements, %{}, %{telemetry_module: nil} = _metadata) do
     :ok
   end
 
-  defp telemetry(event_name, measurements, meta, %{telemetry_module: telemetry_module} = state) do
-    measurements = add_measurements(List.last(event_name), measurements, state)
-    event_name = [:mllp, :receiver] ++ event_name
-
+  defp do_telemetry(event, measurements, meta, %{telemetry_module: telemetry_module} = state) do
     telemetry_module.execute(
-      event_name,
-      add_measurements(List.last(event_name), measurements, state),
+      event,
+      add_measurements(List.last(event), measurements, state),
       meta
-    )
-
-    maybe_fire_event_callback(
-      event_name,
-      Map.merge(meta, state.framing_context.receiver_context),
-      state
     )
   end
 
