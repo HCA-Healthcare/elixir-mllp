@@ -463,7 +463,7 @@ defmodule ClientTest do
       message = HL7.Message.new(raw_hl7)
 
       {:ok, pid} =
-        MLLP.Client.start_link("127.0.0.1", 5555,
+        Client.start_link("127.0.0.1", 4090,
           response_handler: fn response ->
             ## Captured response is a valid (raw) HL7 message
             assert %HL7.Message{} = HL7.Message.new(response)
