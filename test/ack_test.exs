@@ -100,7 +100,7 @@ defmodule AckTest do
       message = HL7.Examples.wikipedia_sample_hl7()
       ack_message = get_ack_for_wikipedia_example(:application_accept)
 
-      expected_ack = %Ack{acknowledgement_code: "AA"}
+      expected_ack = %Ack{acknowledgement_code: "AA", hl7_ack_message: ack_message}
 
       assert {:ok, :application_accept, expected_ack} ==
                Ack.verify_ack_against_message(message, ack_message)
@@ -109,7 +109,7 @@ defmodule AckTest do
     test "with code `AA`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("AA")
-      expected_ack = %Ack{acknowledgement_code: "AA"}
+      expected_ack = %Ack{acknowledgement_code: "AA", hl7_ack_message: hl7_ack}
 
       assert {:ok, :application_accept, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -118,7 +118,7 @@ defmodule AckTest do
     test "with code `CA`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("CA")
-      expected_ack = %Ack{acknowledgement_code: "CA"}
+      expected_ack = %Ack{acknowledgement_code: "CA", hl7_ack_message: hl7_ack}
 
       assert {:ok, :application_accept, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -127,7 +127,7 @@ defmodule AckTest do
     test "with code `application_reject`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example(:application_reject)
-      expected_ack = %Ack{acknowledgement_code: "AR"}
+      expected_ack = %Ack{acknowledgement_code: "AR", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_reject, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -136,7 +136,7 @@ defmodule AckTest do
     test "with code `AR`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("AR")
-      expected_ack = %Ack{acknowledgement_code: "AR"}
+      expected_ack = %Ack{acknowledgement_code: "AR", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_reject, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -145,7 +145,7 @@ defmodule AckTest do
     test "with code `CR`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("CR")
-      expected_ack = %Ack{acknowledgement_code: "CR"}
+      expected_ack = %Ack{acknowledgement_code: "CR", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_reject, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -154,7 +154,7 @@ defmodule AckTest do
     test "with code `application_error`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example(:application_error)
-      expected_ack = %Ack{acknowledgement_code: "AE"}
+      expected_ack = %Ack{acknowledgement_code: "AE", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_error, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -163,7 +163,7 @@ defmodule AckTest do
     test "with code `AE`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("AE")
-      expected_ack = %Ack{acknowledgement_code: "AE"}
+      expected_ack = %Ack{acknowledgement_code: "AE", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_error, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)
@@ -172,7 +172,7 @@ defmodule AckTest do
     test "with code `CE`" do
       hl7_message = HL7.Examples.wikipedia_sample_hl7()
       hl7_ack = get_ack_for_wikipedia_example("CE")
-      expected_ack = %Ack{acknowledgement_code: "CE"}
+      expected_ack = %Ack{acknowledgement_code: "CE", hl7_ack_message: hl7_ack}
 
       assert {:error, :application_error, expected_ack} ==
                Ack.verify_ack_against_message(hl7_message, hl7_ack)

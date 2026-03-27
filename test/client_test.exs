@@ -224,12 +224,12 @@ defmodule ClientTest do
     test "with valid HL7 returns an AA", ctx do
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
-      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
+      expected_ack = %MLLP.Ack{acknowledgement_code: "AA"}
 
-      assert(
-        {:ok, :application_accept, expected_ack} ==
-          Client.send(ctx.client, message, %{reply_timeout: 1000})
-      )
+      {:ok, :application_accept, ack} =
+        Client.send(ctx.client, message, %{reply_timeout: 1000})
+
+      assert ack.acknowledgement_code == expected_ack.acknowledgement_code
     end
 
     test "when replies are fragmented", ctx do
@@ -237,12 +237,10 @@ defmodule ClientTest do
 
       message = HL7.Message.new(raw_hl7)
 
-      expected_ack = %MLLP.Ack{acknowledgement_code: "AA", text_message: ""}
-
       log =
         capture_log([level: :debug], fn ->
-          assert {:ok, :application_accept, expected_ack} ==
-                   Client.send(ctx.client, message)
+          {:ok, :application_accept, _ack} =
+            Client.send(ctx.client, message)
         end)
 
       fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"

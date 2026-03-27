@@ -148,7 +148,11 @@ defmodule MLLP.Ack do
     ack_result = ack_msa |> HL7.Segment.get_part(1)
     text_message = ack_msa |> HL7.Segment.get_part(3)
 
-    ack = %__MODULE__{acknowledgement_code: ack_result, text_message: text_message}
+    ack = %__MODULE__{
+      acknowledgement_code: ack_result,
+      text_message: text_message,
+      hl7_ack_message: ack
+    }
 
     if String.contains?(ack_message_control_id, message_control_id) do
       case ack_result do
