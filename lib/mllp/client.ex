@@ -145,6 +145,7 @@ defmodule MLLP.Client do
           auto_reconnect_interval: non_neg_integer(),
           pid: pid() | nil,
           telemetry_module: module() | nil,
+          response_handler: function() | nil,
           tcp: module() | nil,
           tls_opts: Keyword.t(),
           socket_opts: Keyword.t(),
@@ -163,6 +164,7 @@ defmodule MLLP.Client do
             port: 0,
             pid: nil,
             telemetry_module: nil,
+            response_handler: nil,
             tcp: nil,
             tcp_error: nil,
             host_string: nil,
@@ -649,7 +651,7 @@ defmodule MLLP.Client do
     receive_impl(reply, data)
   end
 
-  def receive_impl(reply, %{receive_buffer: buffer, last_byte_received: last_byte} = data) do
+  def receive_impl(reply, %{receive_buffer: buffer, last_byte_received: last_byte, response_handler: response_handler} = data) do
     new_buf = update_receive_buffer(buffer, reply)
 
     case trailer_check(reply, last_byte) do
@@ -661,9 +663,15 @@ defmodule MLLP.Client do
 
       true ->
         Logger.debug("Client #{inspect(self())} received a full MLLP!")
-
-        reply_to_caller({:ok, IO.iodata_to_binary(new_buf)}, data)
+        full_mllp = IO.iodata_to_binary(new_buf)
+        reply_to_caller({:ok, full_mllp}, data)
         |> tap(fn _ -> telemetry(:receive_valid, %{}, data) end)
+        |> tap(fn _ when is_function(response_handler, 1) ->
+            response_handler.(
+              MLLP.Envelope.unwrap_message(full_mllp)
+            )
+            _ -> :ok
+        end)
 
       false ->
         Logger.debug("Client #{inspect(self())} received a MLLP fragment: #{reply}")
