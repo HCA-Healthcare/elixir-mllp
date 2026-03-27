@@ -461,19 +461,21 @@ defmodule ClientTest do
 
       raw_hl7 = HL7.Examples.wikipedia_sample_hl7()
       message = HL7.Message.new(raw_hl7)
-      {:ok, pid} = MLLP.Client.start_link("127.0.0.1", 5555, response_handler: fn response ->
-        ## Captured response is a valid (raw) HL7 message
-        assert %HL7.Message{} = HL7.Message.new(response)
-        ## Prove that the response parser was called
-        Logger.debug("Response handler was called")
-      end)
+
+      {:ok, pid} =
+        MLLP.Client.start_link("127.0.0.1", 5555,
+          response_handler: fn response ->
+            ## Captured response is a valid (raw) HL7 message
+            assert %HL7.Message{} = HL7.Message.new(response)
+            ## Prove that the response parser was called
+            Logger.debug("Response handler was called")
+          end
+        )
 
       assert capture_log([level: :debug], fn ->
-          {:ok, :application_accept, _} = Client.send(pid, message)
-      end) =~ "Response handler was called"
-
+               {:ok, :application_accept, _} = Client.send(pid, message)
+             end) =~ "Response handler was called"
     end
-
   end
 
   describe "send_async/2" do
