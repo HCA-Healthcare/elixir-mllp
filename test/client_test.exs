@@ -472,10 +472,9 @@ defmodule ClientTest do
           end
         )
 
-      :timer.sleep(1000)
-
       assert capture_log([level: :debug], fn ->
                {:ok, :application_accept, _} = Client.send(pid, message)
+               :timer.sleep(100)
              end) =~ "Response handler was called"
     end
   end
