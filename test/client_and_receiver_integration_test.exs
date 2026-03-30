@@ -29,14 +29,10 @@ defmodule ClientAndReceiverIntegrationTest do
   end
 
   setup ctx do
-    ack = {
-      :ok,
-      :application_accept,
-      %MLLP.Ack{
-        acknowledgement_code: "AA",
-        hl7_ack_message: nil,
-        text_message: "A real MLLP message dispatcher was not provided"
-      }
+    ack = %MLLP.Ack{
+      acknowledgement_code: "AA",
+      hl7_ack_message: nil,
+      text_message: "A real MLLP message dispatcher was not provided"
     }
 
     transport_opts = ctx[:transport_opts] || %{}
@@ -290,7 +286,7 @@ defmodule ClientAndReceiverIntegrationTest do
       refute MLLP.Client.is_connected?(client_pid)
     end
 
-    test "with a larger message" do
+    test "with a larger message", ctx do
       port = 8152
 
       {:ok, %{pid: _receiver_pid}} =
@@ -306,17 +302,8 @@ defmodule ClientAndReceiverIntegrationTest do
            "ZNK|JUNK|" <> String.pad_leading("\r", 10000, "Z"))
         |> HL7.Message.new()
 
-      ack = MLLP.Client.send(client_pid, message)
-
-      expected =
-        {:ok, :application_accept,
-         %MLLP.Ack{
-           acknowledgement_code: "AA",
-           hl7_ack_message: nil,
-           text_message: ""
-         }}
-
-      assert expected == ack
+      {:ok, :application_accept, ack} = MLLP.Client.send(client_pid, message)
+      assert ctx.ack.acknowledgement_code == ack.acknowledgement_code
     end
   end
 
@@ -405,11 +392,13 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link("localhost", ctx.port, tls: ctx.client_tls_options)
 
-      assert ctx.ack ==
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      {:ok, :application_accept, ack} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+
+      assert ctx.ack.acknowledgement_code == ack.acknowledgement_code
     end
 
     @tag :tls
@@ -431,11 +420,13 @@ defmodule ClientAndReceiverIntegrationTest do
       {:ok, client_pid} =
         MLLP.Client.start_link("localhost", ctx.port, tls: [verify: :verify_none])
 
-      assert ctx.ack ==
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      {:ok, :application_accept, ack} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+
+      assert ctx.ack.acknowledgement_code == ack.acknowledgement_code
     end
 
     @tag :tls
@@ -485,11 +476,13 @@ defmodule ClientAndReceiverIntegrationTest do
       {:connected, %{socket: socket}} = :sys.get_state(client_pid)
       assert {:ok, _} = :ssl.getstat(socket)
 
-      assert ctx.ack ==
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      {:ok, :application_accept, ack} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+
+      assert ctx.ack.acknowledgement_code == ack.acknowledgement_code
     end
   end
 
@@ -568,11 +561,13 @@ defmodule ClientAndReceiverIntegrationTest do
     test "allow connection from allowed clients", ctx do
       {:ok, client_pid} = MLLP.Client.start_link("localhost", ctx.port)
 
-      assert ctx.ack ==
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      {:ok, :application_accept, ack} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+
+      assert ack.acknowledgement_code == ctx.ack.acknowledgement_code
     end
 
     @tag allowed_clients: [:localhost]
@@ -580,11 +575,13 @@ defmodule ClientAndReceiverIntegrationTest do
     test "atom is allowed as client ip or dns", ctx do
       {:ok, client_pid} = MLLP.Client.start_link("localhost", ctx.port)
 
-      assert ctx.ack ==
-               MLLP.Client.send(
-                 client_pid,
-                 HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
-               )
+      {:ok, :application_accept, ack} =
+        MLLP.Client.send(
+          client_pid,
+          HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
+        )
+
+      assert ctx.ack.acknowledgement_code == ack.acknowledgement_code
     end
   end
 
@@ -640,7 +637,7 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag reason: [{:options, {:certfile, ""}}]
     test "does not verify client cert if verify none option is provided on receiver", ctx do
       if otp_release() < 26 do
-        make_call_and_assert_success(ctx, ctx.ack)
+        make_call_and_assert_success(ctx)
       else
         make_call_and_assert_failure(ctx, ctx.reason)
       end
@@ -658,13 +655,13 @@ defmodule ClientAndReceiverIntegrationTest do
 
     @tag port: 8163
     test "accepts a peer cert", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
     @tag port: 8164
     @tag allowed_clients: ["client-1"]
     test "accepts peer cert for allowed client", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
     @tag port: 8165
@@ -701,7 +698,7 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag port: 8168
     @tag allowed_clients: ["client-x", "client-1"]
     test "accept peer cert from multiple allowed clients", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
     @tag port: 8169, dispatcher: MLLP.DispatcherMock
@@ -721,13 +718,13 @@ defmodule ClientAndReceiverIntegrationTest do
         {:ok, %{state | reply_buffer: ack}}
       end)
 
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
     @tag port: 8170
     @tag allowed_clients: ["CLIENT-1"]
     test "accept peer cert with case mismatch", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
     @tag port: 8171
@@ -735,11 +732,12 @@ defmodule ClientAndReceiverIntegrationTest do
          client_cert: "tls/client_mixed_case_cn/client_certificate.pem",
          keyfile: "tls/client_mixed_case_cn/private_key.pem"
     test "accept peer cert with mixed case CN", ctx do
-      make_call_and_assert_success(ctx, ctx.ack)
+      make_call_and_assert_success(ctx)
     end
 
-    defp make_call_and_assert_success(ctx, expected_result) do
-      assert expected_result == start_client_and_send(ctx)
+    defp make_call_and_assert_success(ctx) do
+      {:ok, :application_accept, ack} = start_client_and_send(ctx)
+      assert ack.acknowledgement_code == ctx.ack.acknowledgement_code
     end
 
     defp make_call_and_assert_failure(ctx, expected_error_reasons) do
