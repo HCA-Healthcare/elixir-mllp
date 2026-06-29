@@ -29,7 +29,7 @@ defmodule MLLP.Envelope do
   @doc """
   The MLLP Start-Block character. In documentation it is often represented as `<SB>`.
   The `sb` is a single-byte character with the ASCII value 0x0B. This character is
-  also know as "VT (Vertical Tab)" and may appear as `\\\\v` or `^K` in text editors.
+  also known as "VT (Vertical Tab)" and may appear as `\\\\v` or `^K` in text editors.
 
   ## Examples
 
@@ -42,7 +42,7 @@ defmodule MLLP.Envelope do
   @doc """
   The MLLP End-Block character. In documentation it is often represented as `<EB>`.
   The `eb` is a single-byte character with the ASCII value 0x1C. This character is
-  also know as "FS (File Separator)" and may appear as `^\\` in text editors.
+  also known as "FS (File Separator)" and may appear as `^\\` in text editors.
 
   ## Examples
 
