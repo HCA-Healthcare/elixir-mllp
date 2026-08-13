@@ -34,7 +34,7 @@ defmodule MLLP.Envelope do
   ## Examples
 
       iex> MLLP.Envelope.sb
-      "\v"
+     \u000B
 
   """
   def sb, do: @sb

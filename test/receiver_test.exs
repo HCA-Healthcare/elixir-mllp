@@ -9,7 +9,6 @@ defmodule ReceiverTest do
   setup :set_mox_global
 
   alias MLLP.{FramingContext, Receiver}
-  require Logger
 
   doctest Receiver
 

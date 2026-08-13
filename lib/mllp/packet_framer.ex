@@ -84,7 +84,7 @@ defmodule MLLP.PacketFramer do
               check = byte_size(state.receiver_buffer) - 1
 
               case state.receiver_buffer do
-                <<message::binary-size(check), unquote(file_sep)>> ->
+                <<message::binary-size(^check), unquote(file_sep)>> ->
                   message_type_atom = get_message_type(message_type_value, message)
 
                   {:ok, new_state} =

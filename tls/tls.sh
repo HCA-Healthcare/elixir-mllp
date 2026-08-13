@@ -16,7 +16,7 @@ cd ../server
 # generate a req
 openssl genrsa -out private_key.pem 2048
 openssl req -new -key private_key.pem -out req.pem -outform PEM \
-    -subj /CN=localhost/O=server/ -nodes
+    -subj /CN=localhost/O=server/ -addext 'subjectAltName = DNS:localhost' -nodes
 
 cd ../root-ca
 
@@ -41,7 +41,7 @@ cd ../client_mixed_case_cn
 
 openssl genrsa -out private_key.pem 2048
 openssl req -new -key private_key.pem -out req.pem -outform PEM \
-    -subj /CN=MIXED-CASE-client-cert/O=client/ -nodes
+    -subj /CN=MIXED-CASE-client-cert/O=client/ -addext 'subjectAltName = DNS:MIXED-CASE-client-cert' -nodes
 
 cd ../root-ca
 openssl ca -config ../openssl.cnf -in ../client_mixed_case_cn/req.pem -out \

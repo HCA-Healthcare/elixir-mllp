@@ -11,15 +11,20 @@ defmodule MLLP.MixProject do
       description: description(),
       elixirc_paths: elixirc_paths(Mix.env()),
       dialyzer: dialyzer_opts(),
-      preferred_cli_env: [
+      test_coverage: [tool: ExCoveralls],
+      package: package(),
+      docs: docs()
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test
-      ],
-      test_coverage: [tool: ExCoveralls],
-      package: package(),
-      docs: docs()
+      ]
     ]
   end
 
@@ -35,14 +40,14 @@ defmodule MLLP.MixProject do
   defp deps do
     [
       {:telemetry, "~> 1.0"},
-      {:ranch, "~> 1.8.0"},
-      {:elixir_hl7, "~> 0.8.0"},
-      {:backoff, "~> 1.1.6"},
-      {:ex_doc, "~> 0.24.2", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.4.4", only: [:dev, :test], runtime: false},
-      {:mix_test_watch, "~> 1.0.2", only: :dev, runtime: false},
-      {:mox, "~> 1.0.0", only: :test},
-      {:excoveralls, "~> 0.14.4", only: :test, runtime: false}
+      {:ranch, "~> 1.8"},
+      {:elixir_hl7, "~> 0.12"},
+      {:backoff, "~> 1.1"},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:mix_test_watch, "~> 1.0", only: :dev, runtime: false},
+      {:mox, "~> 1.2", only: :test},
+      {:excoveralls, "~> 0.18", only: :test, runtime: false}
     ]
   end
 
