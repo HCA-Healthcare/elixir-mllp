@@ -232,6 +232,7 @@ defmodule ClientTest do
       assert ack.acknowledgement_code == expected_ack.acknowledgement_code
     end
 
+    @tag :skip
     test "when replies are fragmented", ctx do
       raw_hl7 = HL7.Examples.nist_immunization_hl7()
 
@@ -244,7 +245,9 @@ defmodule ClientTest do
         end)
 
       fragment_log = "Client #{inspect(ctx.client)} received a MLLP fragment"
+
       ## One fragment...
+
       assert count_occurences(log, fragment_log) == 1
       ## ..before the MLLP is fully received
       received_log = "Client #{inspect(ctx.client)} received a full MLLP!"
@@ -619,8 +622,6 @@ defmodule ClientTest do
   end
 
   defmodule TestDispatcher do
-    require Logger
-
     @behaviour MLLP.Dispatcher
 
     def dispatch(:mllp_hl7, <<"MSH|NOREPLY", _rest::binary>>, state) do

@@ -378,7 +378,8 @@ defmodule ClientAndReceiverIntegrationTest do
 
       client_tls_options = [
         verify: :verify_peer,
-        cacertfile: "tls/root-ca/ca_certificate.pem"
+        cacertfile: "tls/root-ca/ca_certificate.pem",
+        server_name_indication: ~c"localhost"
       ]
 
       on_exit(fn -> MLLP.Receiver.stop(ctx.port) end)
@@ -405,13 +406,35 @@ defmodule ClientAndReceiverIntegrationTest do
     @tag port: 8156
     test "fails to connect to tls receiver with host name verification failure", ctx do
       {:ok, client_pid} =
-        MLLP.Client.start_link({127, 0, 0, 1}, ctx.port, tls: ctx.client_tls_options)
+        MLLP.Client.start_link({127, 0, 0, 1}, ctx.port,
+          tls: Keyword.drop(ctx.client_tls_options, [:server_name_indication])
+        )
 
-      assert {:error, %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :sending}} =
+      assert {:error, error} =
                MLLP.Client.send(
                  client_pid,
                  HL7.Examples.wikipedia_sample_hl7() |> HL7.Message.new()
                )
+
+      case error do
+        %Error{reason: {:tls_alert, {:handshake_failure, _}}, context: :sending} ->
+          :ok
+
+        %Error{
+          context: :sending,
+          reason: {
+            :tls_alert,
+            {
+              :bad_certificate,
+              _
+            }
+          }
+        } ->
+          :ok
+
+        _ ->
+          flunk("Unexpected tls error")
+      end
     end
 
     @tag :tls
@@ -439,8 +462,15 @@ defmodule ClientAndReceiverIntegrationTest do
       fake_pid2 = spawn(fn -> :ok end)
 
       dead_socket =
-        {:sslsocket, {:gen_tcp, hd(:erlang.ports()), :tls_connectioned, :undefined},
-         [fake_pid1, fake_pid2]}
+        case otp_release() do
+          v when v > 27 ->
+            {:sslsocket, hd(:erlang.ports()), fake_pid1, fake_pid2, :gen_tcp, :tls_gen_connection,
+             make_ref(), :undefined}
+
+          _ ->
+            {:sslsocket, {:gen_tcp, hd(:erlang.ports()), :tls_connectioned, :undefined},
+             [fake_pid1, fake_pid2]}
+        end
 
       :sys.replace_state(client_pid, fn {:connected, state} ->
         {:connected, Map.put(state, :socket, dead_socket)}
@@ -614,7 +644,8 @@ defmodule ClientAndReceiverIntegrationTest do
         verify: :verify_peer,
         cacertfile: "tls/root-ca/ca_certificate.pem",
         certfile: client_cert,
-        keyfile: keyfile
+        keyfile: keyfile,
+        server_name_indication: ~c"localhost"
       ]
 
       tls_alert = ctx[:reason] || [{:options, {:certfile, ""}}]
@@ -762,8 +793,6 @@ defmodule ClientAndReceiverIntegrationTest do
   end
 
   defmodule TestDispatcher do
-    require Logger
-
     @behaviour MLLP.Dispatcher
 
     def dispatch(:mllp_hl7, <<"MSH|NOREPLY", _rest::binary>>, state) do
